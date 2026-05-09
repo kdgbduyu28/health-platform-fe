@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+<module fileurl="file://$PROJECT_DIR$/apps/admin_app/melos_admin_app.iml" filepath="$PROJECT_DIR$/apps/admin_app/melos_admin_app.iml"/>
+<module fileurl="file://$PROJECT_DIR$/packages/dependencies/melos_api_sdk.iml" filepath="$PROJECT_DIR$/packages/dependencies/melos_api_sdk.iml"/>
+<module fileurl="file://$PROJECT_DIR$/apps/assistant_app/melos_assistant_app.iml" filepath="$PROJECT_DIR$/apps/assistant_app/melos_assistant_app.iml"/>
+<module fileurl="file://$PROJECT_DIR$/apps/doctor_app/melos_doctor_app.iml" filepath="$PROJECT_DIR$/apps/doctor_app/melos_doctor_app.iml"/>
+<module fileurl="file://$PROJECT_DIR$/apps/patient_app/melos_patient_app.iml" filepath="$PROJECT_DIR$/apps/patient_app/melos_patient_app.iml"/>
+<module fileurl="file://$PROJECT_DIR$/melos_health_platform_fe_workspace.iml" filepath="$PROJECT_DIR$/melos_health_platform_fe_workspace.iml"/>
+    </modules>
+  </component>
+</project>

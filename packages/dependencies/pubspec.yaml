@@ -3,6 +3,8 @@ description: "Shared models, providers, theme, and widgets for health platform."
 version: 0.0.1
 homepage:
 
+resolution: workspace
+
 environment:
   sdk: ^3.9.2
   flutter: ">=1.17.0"

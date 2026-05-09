@@ -1,0 +1,41 @@
+name: health_platform_fe_workspace
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+workspace:
+  - apps/patient_app
+  - apps/doctor_app
+  - apps/assistant_app
+  - apps/admin_app
+  - packages/dependencies
+
+dev_dependencies:
+  melos: ^7.0.0
+
+melos:
+  scripts:
+    assistant:web:
+      run: cd apps/assistant_app && flutter run -d chrome
+
+    assistant:build:web:
+      run: cd apps/assistant_app && flutter build web
+
+    patient:web:
+      run: cd apps/patient_app && flutter run -d chrome
+
+    patient:build:web:
+      run: cd apps/patient_app && flutter build web
+
+    doctor:web:
+      run: cd apps/doctor_app && flutter run -d chrome
+
+    doctor:build:web:
+      run: cd apps/doctor_app && flutter build web
+
+    admin:web:
+      run: cd apps/admin_app && flutter run -d chrome
+
+    admin:build:web:
+      run: cd apps/admin_app && flutter build web

@@ -1,0 +1,33 @@
+name: health_platform_fe
+
+packages:
+  - apps/patient_app
+  - apps/doctor_app
+  - apps/assistant_app
+  - apps/admin_app
+  - packages/dependencies
+
+scripts:
+    assistant:web:
+      run: cd apps/assistant_app && flutter run -d chrome
+
+    assistant:build:web:
+      run: cd apps/assistant_app && flutter build web
+
+    patient:web:
+      run: cd apps/patient_app && flutter run -d chrome
+
+    patient:build:web:
+      run: cd apps/patient_app && flutter build web
+
+    doctor:web:
+      run: cd apps/doctor_app && flutter run -d chrome
+
+    doctor:build:web:
+      run: cd apps/doctor_app && flutter build web
+
+    admin:web:
+      run: cd apps/admin_app && flutter run -d chrome
+
+    admin:build:web:
+      run: cd apps/admin_app && flutter build web

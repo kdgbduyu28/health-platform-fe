@@ -3,6 +3,8 @@ description: "Patient-facing appointment app for health platform clinics."
 publish_to: 'none'
 version: 1.0.0+1
 
+resolution: workspace
+
 environment:
   sdk: ^3.9.2
 
