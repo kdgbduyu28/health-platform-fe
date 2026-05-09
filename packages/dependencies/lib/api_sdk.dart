@@ -1,0 +1,12 @@
+export 'src/models/clinic_type.dart';
+export 'src/models/appointment_status.dart';
+export 'src/models/appointment.dart';
+export 'src/models/patient.dart';
+export 'src/models/doctor.dart';
+export 'src/data/mock_data.dart';
+export 'src/providers/clinic_provider.dart';
+export 'src/providers/appointments_provider.dart';
+export 'src/theme/clinic_theme.dart';
+export 'src/widgets/appointment_card.dart';
+export 'src/widgets/status_badge.dart';
+export 'src/widgets/doctor_avatar.dart';

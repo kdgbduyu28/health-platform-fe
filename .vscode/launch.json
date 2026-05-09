@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Admin App (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}/apps/admin_app",
+      "deviceId": "chrome"
+    },
+    {
+      "name": "Assistant App (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}/apps/assistant_app",
+      "deviceId": "chrome"
+    },
+    {
+      "name": "Patient App (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}/apps/patient_app",
+      "deviceId": "chrome"
+    },
+    {
+      "name": "Doctor App (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}/apps/doctor_app",
+      "deviceId": "chrome"
+    }
+  ]
+}
