@@ -23,7 +23,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allClinic = ref.watch(clinicAppointmentsProvider);
+    final allClinicAsync = ref.watch(clinicAppointmentsProvider);
+    final allClinic = allClinicAsync.value ?? const <Appointment>[];
     final selectedDay = allClinic
         .where((a) =>
             a.dateTime.year == _selectedDate.year &&

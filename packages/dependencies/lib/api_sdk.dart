@@ -1,12 +1,26 @@
-export 'src/models/clinic_type.dart';
-export 'src/models/appointment_status.dart';
+export 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthException, PostgrestException, User;
+
+export 'src/app/bootstrap.dart';
+export 'src/app/clinic_app_shell.dart';
+export 'src/config/supabase_config.dart';
+export 'src/data/health_repository.dart';
+export 'src/models/app_role.dart';
 export 'src/models/appointment.dart';
-export 'src/models/patient.dart';
+export 'src/models/appointment_status.dart';
+export 'src/models/clinic.dart';
+export 'src/models/clinic_type.dart';
 export 'src/models/doctor.dart';
-export 'src/data/mock_data.dart';
-export 'src/providers/clinic_provider.dart';
+export 'src/models/patient.dart';
+export 'src/models/profile.dart';
+export 'src/models/service.dart';
 export 'src/providers/appointments_provider.dart';
+export 'src/providers/catalog_provider.dart';
+export 'src/providers/clinic_provider.dart';
+export 'src/providers/supabase_providers.dart';
 export 'src/theme/clinic_theme.dart';
 export 'src/widgets/appointment_card.dart';
-export 'src/widgets/status_badge.dart';
+export 'src/widgets/async_view.dart';
 export 'src/widgets/doctor_avatar.dart';
+export 'src/widgets/sign_in_screen.dart';
+export 'src/widgets/status_badge.dart';

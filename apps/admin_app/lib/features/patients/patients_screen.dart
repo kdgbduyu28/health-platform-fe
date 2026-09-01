@@ -15,8 +15,13 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allAppointments = ref.watch(clinicAppointmentsProvider);
-    final patients = MockData.patients.where((p) {
+    final patientsAsync = ref.watch(patientsProvider);
+    final appointmentsAsync = ref.watch(clinicAppointmentsProvider);
+
+    // RLS already limits this to the clinic's roster plus anyone referred in,
+    // so the search only has to narrow what the database already allowed.
+    final allAppointments = appointmentsAsync.value ?? const <Appointment>[];
+    final patients = (patientsAsync.value ?? const <Patient>[]).where((p) {
       if (_query.isEmpty) return true;
       return p.name.toLowerCase().contains(_query.toLowerCase()) ||
           p.phone.contains(_query);
@@ -45,7 +50,13 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
+            child: !patientsAsync.hasValue
+                ? AsyncView(
+                    value: patientsAsync,
+                    onRetry: () => ref.invalidate(patientsProvider),
+                    builder: (_) => const SizedBox.shrink(),
+                  )
+                : ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               itemCount: patients.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),

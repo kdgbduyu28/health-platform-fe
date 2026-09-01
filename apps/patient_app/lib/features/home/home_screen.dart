@@ -10,7 +10,8 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final clinicType = ref.watch(clinicTypeProvider);
-    final upcoming = ref.watch(myUpcomingAppointmentsProvider);
+    final upcomingAsync = ref.watch(myUpcomingAppointmentsProvider);
+    final profile = ref.watch(myProfileProvider).value;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
@@ -22,7 +23,7 @@ class HomeScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Good day, Juan',
+                  'Good day, ${profile?.firstName ?? 'there'}',
                   style: theme.textTheme.bodyMedium
                       ?.copyWith(color: cs.onSurfaceVariant),
                 ),
@@ -63,42 +64,47 @@ class HomeScreen extends ConsumerWidget {
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-            sliver: SliverList.list(
-              children: [
-                if (upcoming.isNotEmpty) ...[
-                  _NextAppointmentCard(
-                    appointment: upcoming.first,
-                    onTap: () =>
-                        context.push('/appointments/${upcoming.first.id}'),
+            sliver: SliverAsyncView(
+              value: upcomingAsync,
+              onRetry: () => ref.invalidate(appointmentsProvider),
+              builder: (upcoming) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (upcoming.isNotEmpty)
+                    _NextAppointmentCard(
+                      appointment: upcoming.first,
+                      onTap: () =>
+                          context.push('/appointments/${upcoming.first.id}'),
+                    )
+                  else
+                    _EmptyCard(clinicType: clinicType),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () => context.push('/appointments/book'),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Book Appointment'),
                   ),
-                ] else
-                  _EmptyCard(clinicType: clinicType),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () => context.push('/appointments/book'),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Book Appointment'),
-                ),
-                if (upcoming.length > 1) ...[
-                  const SizedBox(height: 24),
-                  Text(
-                    'Upcoming',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  ...upcoming.skip(1).take(3).map(
-                        (a) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: AppointmentCard(
-                            appointment: a,
-                            onTap: () =>
-                                context.push('/appointments/${a.id}'),
+                  if (upcoming.length > 1) ...[
+                    const SizedBox(height: 24),
+                    Text(
+                      'Upcoming',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    ...upcoming.skip(1).take(3).map(
+                          (a) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: AppointmentCard(
+                              appointment: a,
+                              onTap: () =>
+                                  context.push('/appointments/${a.id}'),
+                            ),
                           ),
                         ),
-                      ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],

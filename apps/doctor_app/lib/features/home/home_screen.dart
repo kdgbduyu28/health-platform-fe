@@ -24,10 +24,16 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
   @override
   Widget build(BuildContext context) {
     final clinicType = ref.watch(clinicTypeProvider);
-    final doctor = ref.watch(currentDoctorProvider);
-    final todayAppts = ref.watch(myDoctorTodayProvider);
-    final allAppts = ref.watch(myDoctorAppointmentsProvider);
-    final upcoming = allAppts
+    final doctorAsync = ref.watch(currentDoctorProvider);
+    final todayAsync = ref.watch(myDoctorTodayProvider);
+    final allAsync = ref.watch(myDoctorAppointmentsProvider);
+
+    // The app bar shows tab counts, so it needs values before the lists below
+    // can render. Empty is the right stand-in while loading; the tab bodies
+    // still show a spinner or a real error through AsyncView.
+    final doctor = doctorAsync.value;
+    final todayAppts = todayAsync.value ?? const <Appointment>[];
+    final upcoming = (allAsync.value ?? const <Appointment>[])
         .where((a) =>
             a.dateTime.isAfter(DateTime.now()) &&
             !a.isToday &&
@@ -47,7 +53,7 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                 Text('Welcome back',
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(color: cs.onSurfaceVariant)),
-                Text('Dr. ${doctor.name}',
+                Text(doctor == null ? 'Doctor' : 'Dr. ${doctor.name}',
                     style: theme.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
               ],
@@ -68,7 +74,7 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                         size: 16, color: cs.onPrimaryContainer),
                     const SizedBox(width: 4),
                     Text(
-                      doctor.specialty,
+                      doctor?.specialty ?? clinicType.displayName,
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -136,15 +142,23 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
               child: TabBarView(
                 controller: _tabs,
                 children: [
-                  _AppointmentListTab(
-                    appointments: todayAppts,
-                    emptyMessage: 'No appointments today',
-                    showTime: true,
+                  AsyncView(
+                    value: todayAsync,
+                    onRetry: () => ref.invalidate(appointmentsProvider),
+                    builder: (today) => _AppointmentListTab(
+                      appointments: today,
+                      emptyMessage: 'No appointments today',
+                      showTime: true,
+                    ),
                   ),
-                  _AppointmentListTab(
-                    appointments: upcoming,
-                    emptyMessage: 'No upcoming appointments',
-                    showTime: false,
+                  AsyncView(
+                    value: allAsync,
+                    onRetry: () => ref.invalidate(appointmentsProvider),
+                    builder: (_) => _AppointmentListTab(
+                      appointments: upcoming,
+                      emptyMessage: 'No upcoming appointments',
+                      showTime: false,
+                    ),
                   ),
                 ],
               ),

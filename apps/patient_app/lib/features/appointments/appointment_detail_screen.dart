@@ -11,12 +11,16 @@ class AppointmentDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final appointments = ref.watch(appointmentsProvider);
-    final appointment = appointments.cast<Appointment?>().firstWhere(
-          (a) => a?.id == appointmentId,
-          orElse: () => null,
-        );
+    final appointmentAsync = ref.watch(appointmentByIdProvider(appointmentId));
 
+    final guard = asyncGuard(
+      appointmentAsync,
+      appBar: AppBar(title: const Text('Appointment')),
+      onRetry: () => ref.invalidate(appointmentsProvider),
+    );
+    if (guard != null) return guard;
+
+    final appointment = appointmentAsync.requireValue;
     if (appointment == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Appointment')),
@@ -158,12 +162,22 @@ class AppointmentDetailScreen extends ConsumerWidget {
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              ref
-                  .read(appointmentsProvider.notifier)
-                  .updateStatus(appointment.id, AppointmentStatus.cancelled);
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(ctx);
-              context.pop();
+              try {
+                await ref
+                    .read(appointmentsProvider.notifier)
+                    .updateStatus(appointment.id, AppointmentStatus.cancelled);
+                if (context.mounted) context.pop();
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(describeError(e)),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
             },
             child: const Text('Cancel Appointment'),
           ),

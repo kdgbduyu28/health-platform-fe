@@ -17,9 +17,10 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
   final _phoneCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  String? _service;
+  Service? _service;
   Doctor? _doctor;
   String? _timeSlot;
+  bool _busy = false;
 
   @override
   void dispose() {
@@ -30,9 +31,8 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final clinicType = ref.watch(clinicTypeProvider);
-    final doctors =
-        MockData.doctors.where((d) => d.clinicType == clinicType).toList();
+    final doctors = ref.watch(doctorsProvider).value ?? const <Doctor>[];
+    final services = ref.watch(servicesProvider).value ?? const <Service>[];
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
 
@@ -79,10 +79,10 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: clinicType.services.map((s) {
-                final selected = s == _service;
+              children: services.map((s) {
+                final selected = s.id == _service?.id;
                 return FilterChip(
-                  label: Text(s),
+                  label: Text(s.name),
                   selected: selected,
                   onSelected: (_) => setState(() => _service = s),
                   selectedColor: cs.primaryContainer,
@@ -146,8 +146,15 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
 
             // Book button
             FilledButton.icon(
-              onPressed: _canSubmit() ? () => _submit(context) : null,
-              icon: const Icon(Icons.add_circle_outline),
+              onPressed:
+                  (_canSubmit() && !_busy) ? () => _submit(context) : null,
+              icon: _busy
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_circle_outline),
               label: const Text('Book Walk-In Appointment'),
             ),
           ],
@@ -159,51 +166,86 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
   bool _canSubmit() =>
       _service != null && _doctor != null && _timeSlot != null;
 
-  void _submit(BuildContext context) {
+  Future<void> _submit(BuildContext context) async {
     if (!_formKey.currentState!.validate()) return;
-    if (!_canSubmit()) return;
+    final service = _service;
+    final doctor = _doctor;
+    final slot = _timeSlot;
+    if (service == null || doctor == null || slot == null) return;
 
-    final parts = _timeSlot!.split(':');
+    final messenger = ScaffoldMessenger.of(context);
+    final clinicId = ref.read(currentClinicIdProvider);
+    if (clinicId == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Still loading the clinic. Try again in a moment.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    final parts = slot.split(':');
     final now = DateTime.now();
-    final dateTime = DateTime(
+    final scheduledAt = DateTime(
         now.year, now.month, now.day, int.parse(parts[0]), int.parse(parts[1]));
 
-    final patient = Patient(
-      id: 'walk_${DateTime.now().millisecondsSinceEpoch}',
-      name: _nameCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
-      email: '',
-    );
+    setState(() => _busy = true);
+    try {
+      // Register the chart first, then book against it. The patient row is
+      // stamped with this clinic, which is exactly what lets RLS hand the row
+      // straight back to us — an appointment-only visibility rule would make
+      // the record we just created unreadable.
+      //
+      // Known gap: these are two statements, not one transaction. If the
+      // booking loses the double-booking race the patient record survives
+      // without an appointment. Folding both into a Postgres function called
+      // over RPC would make it atomic.
+      final patient =
+          await ref.read(healthRepositoryProvider).createWalkInPatient(
+                clinicId: clinicId,
+                fullName: _nameCtrl.text.trim(),
+                phone: _phoneCtrl.text.trim(),
+              );
 
-    final appointment = Appointment(
-      id: 'w_${DateTime.now().millisecondsSinceEpoch}',
-      patient: patient,
-      doctor: _doctor!,
-      dateTime: dateTime,
-      service: _service!,
-      status: AppointmentStatus.confirmed,
-      clinicType: ref.read(clinicTypeProvider),
-    );
+      // Staff may book straight to confirmed; RLS only forces 'pending' on
+      // bookings made by patients themselves.
+      await ref.read(appointmentsProvider.notifier).book(
+            clinicId: clinicId,
+            patientId: patient.id,
+            doctorId: doctor.id,
+            serviceId: service.id,
+            serviceName: service.name,
+            scheduledAt: scheduledAt,
+            status: AppointmentStatus.confirmed,
+          );
 
-    ref.read(appointmentsProvider.notifier).add(appointment);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Booked!'),
-        content: Text(
-          '${patient.name} is booked for $_service at ${DateFormat('h:mm a').format(dateTime)} with Dr. ${_doctor!.name}.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.go('/');
-            },
-            child: const Text('Done'),
+      if (!context.mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Booked!'),
+          content: Text(
+            '${patient.name} is booked for ${service.name} at '
+            '${DateFormat('h:mm a').format(scheduledAt)} '
+            'with Dr. ${doctor.name}.',
           ),
-        ],
-      ),
-    );
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.go('/');
+              },
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(describeError(e)),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }

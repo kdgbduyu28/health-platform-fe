@@ -6,6 +6,12 @@ enum AppointmentStatus {
   completed,
   cancelled;
 
+  /// Matches the `public.appointment_status` labels one-for-one.
+  static AppointmentStatus fromWire(String value) =>
+      AppointmentStatus.values.byName(value);
+
+  String get wire => name;
+
   String get displayName => switch (this) {
         AppointmentStatus.pending => 'Pending',
         AppointmentStatus.confirmed => 'Confirmed',

@@ -15,17 +15,16 @@ class BookAppointmentScreen extends ConsumerStatefulWidget {
 class _BookAppointmentScreenState
     extends ConsumerState<BookAppointmentScreen> {
   int _step = 0;
-  String? _service;
+  Service? _service;
   Doctor? _doctor;
   DateTime? _date;
   String? _timeSlot;
+  bool _busy = false;
 
   @override
   Widget build(BuildContext context) {
-    final clinicType = ref.watch(clinicTypeProvider);
-    final doctors = MockData.doctors
-        .where((d) => d.clinicType == clinicType)
-        .toList();
+    final servicesAsync = ref.watch(servicesProvider);
+    final doctorsAsync = ref.watch(doctorsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -40,44 +39,53 @@ class _BookAppointmentScreenState
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: [
-                _ServiceStep(
-                  services: clinicType.services,
-                  selected: _service,
-                  onSelect: (s) => setState(() {
-                    _service = s;
-                    _step = 1;
-                  }),
-                ),
-                _DoctorStep(
-                  doctors: doctors,
-                  selected: _doctor,
-                  onSelect: (d) => setState(() {
-                    _doctor = d;
-                    _step = 2;
-                  }),
-                ),
-                _DateTimeStep(
-                  doctor: _doctor,
-                  selectedDate: _date,
-                  selectedSlot: _timeSlot,
-                  onDateSelected: (d) => setState(() {
-                    _date = d;
-                    _timeSlot = null;
-                  }),
-                  onSlotSelected: (s) => setState(() {
-                    _timeSlot = s;
-                    _step = 3;
-                  }),
-                ),
-                _ConfirmStep(
-                  service: _service,
-                  doctor: _doctor,
-                  date: _date,
-                  timeSlot: _timeSlot,
-                  onConfirm: () => _confirm(context),
-                ),
-              ][_step],
+              child: switch (_step) {
+                0 => AsyncView(
+                    value: servicesAsync,
+                    onRetry: () => ref.invalidate(servicesProvider),
+                    builder: (services) => _ServiceStep(
+                      services: services,
+                      selected: _service,
+                      onSelect: (s) => setState(() {
+                        _service = s;
+                        _step = 1;
+                      }),
+                    ),
+                  ),
+                1 => AsyncView(
+                    value: doctorsAsync,
+                    onRetry: () => ref.invalidate(doctorsProvider),
+                    builder: (doctors) => _DoctorStep(
+                      doctors: doctors,
+                      selected: _doctor,
+                      onSelect: (d) => setState(() {
+                        _doctor = d;
+                        _step = 2;
+                      }),
+                    ),
+                  ),
+                2 => _DateTimeStep(
+                    doctor: _doctor,
+                    selectedDate: _date,
+                    selectedSlot: _timeSlot,
+                    onDateSelected: (d) => setState(() {
+                      _date = d;
+                      _timeSlot = null;
+                    }),
+                    onSlotSelected: (s) => setState(() {
+                      _timeSlot = s;
+                      _step = 3;
+                    }),
+                  ),
+                _ => _ConfirmStep(
+                    service: _service?.name,
+                    doctor: _doctor,
+                    date: _date,
+                    timeSlot: _timeSlot,
+                    busy: _busy,
+                    onConfirm: _confirm,
+                  ),
+              },
             ),
           ),
         ],
@@ -85,37 +93,74 @@ class _BookAppointmentScreenState
     );
   }
 
-  void _confirm(BuildContext context) {
-    if (_service == null || _doctor == null || _date == null || _timeSlot == null) return;
+  Future<void> _confirm() async {
+    final service = _service;
+    final doctor = _doctor;
+    final date = _date;
+    final slot = _timeSlot;
+    if (service == null || doctor == null || date == null || slot == null) {
+      return;
+    }
 
-    final parts = _timeSlot!.split(':');
-    final dateTime = DateTime(
-      _date!.year,
-      _date!.month,
-      _date!.day,
+    final messenger = ScaffoldMessenger.of(context);
+    final clinicId = ref.read(currentClinicIdProvider);
+    final patient = ref.read(myPatientProvider).value;
+
+    if (clinicId == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Still loading the clinic. Try again in a moment.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    // A signup creates an account and a profile, but not a patient chart —
+    // that link is made by the clinic. Without it there is no patient_id to
+    // book against, and RLS would reject the insert anyway.
+    if (patient == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+          'Your account is not linked to a patient record yet. '
+          'Please contact the clinic.',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    final parts = slot.split(':');
+    final scheduledAt = DateTime(
+      date.year,
+      date.month,
+      date.day,
       int.parse(parts[0]),
       int.parse(parts[1]),
     );
 
-    final appointment = Appointment(
-      id: 'new_${DateTime.now().millisecondsSinceEpoch}',
-      patient: MockData.patients.first,
-      doctor: _doctor!,
-      dateTime: dateTime,
-      service: _service!,
-      status: AppointmentStatus.pending,
-      clinicType: ref.read(clinicTypeProvider),
-    );
-
-    ref.read(appointmentsProvider.notifier).add(appointment);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Appointment booked successfully!'),
+    setState(() => _busy = true);
+    try {
+      await ref.read(appointmentsProvider.notifier).book(
+            clinicId: clinicId,
+            patientId: patient.id,
+            doctorId: doctor.id,
+            serviceId: service.id,
+            serviceName: service.name,
+            scheduledAt: scheduledAt,
+          );
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Appointment requested. The clinic will confirm it.'),
         behavior: SnackBarBehavior.floating,
-      ),
-    );
-    context.go('/appointments');
+      ));
+      context.go('/appointments');
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(describeError(e)),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }
 
@@ -186,13 +231,19 @@ class _ServiceStep extends StatelessWidget {
     required this.onSelect,
   });
 
-  final List<String> services;
-  final String? selected;
-  final ValueChanged<String> onSelect;
+  final List<Service> services;
+  final Service? selected;
+  final ValueChanged<Service> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    if (services.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: Text('This clinic has no bookable services.')),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -206,9 +257,9 @@ class _ServiceStep extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: services.map((s) {
-            final isSelected = s == selected;
+            final isSelected = s.id == selected?.id;
             return FilterChip(
-              label: Text(s),
+              label: Text('${s.name} · ${s.durationMinutes}m'),
               selected: isSelected,
               onSelected: (_) => onSelect(s),
               selectedColor: cs.primaryContainer,
@@ -234,6 +285,12 @@ class _DoctorStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (doctors.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: Text('No doctors are available right now.')),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -377,6 +434,7 @@ class _ConfirmStep extends StatelessWidget {
     required this.doctor,
     required this.date,
     required this.timeSlot,
+    required this.busy,
     required this.onConfirm,
   });
 
@@ -384,6 +442,7 @@ class _ConfirmStep extends StatelessWidget {
   final Doctor? doctor;
   final DateTime? date;
   final String? timeSlot;
+  final bool busy;
   final VoidCallback onConfirm;
 
   @override
@@ -428,8 +487,14 @@ class _ConfirmStep extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         FilledButton(
-          onPressed: onConfirm,
-          child: const Text('Confirm Booking'),
+          onPressed: busy ? null : onConfirm,
+          child: busy
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Confirm Booking'),
         ),
       ],
     );

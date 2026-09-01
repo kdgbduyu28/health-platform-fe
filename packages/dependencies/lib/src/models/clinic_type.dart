@@ -5,6 +5,14 @@ enum ClinicType {
   optometry,
   pedia;
 
+  /// The enum labels in Postgres (`public.clinic_type`) are identical to these
+  /// Dart names, so the wire format needs no translation table — but going
+  /// through here keeps the coupling explicit and fails loudly if that ever
+  /// stops being true.
+  static ClinicType fromWire(String value) => ClinicType.values.byName(value);
+
+  String get wire => name;
+
   String get displayName => switch (this) {
     ClinicType.dental => 'Dental',
     ClinicType.optometry => 'Eye Care',

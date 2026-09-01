@@ -25,8 +25,11 @@ class _MyAppointmentsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(myAppointmentsProvider);
+    final allAsync = ref.watch(myAppointmentsProvider);
     final now = DateTime.now();
+
+    // Tab labels carry counts, so they can only be built once the data is in.
+    final all = allAsync.value ?? const <Appointment>[];
     final upcoming = all
         .where((a) =>
             a.dateTime.isAfter(now) &&
@@ -56,20 +59,28 @@ class _MyAppointmentsScreenState
         icon: const Icon(Icons.add),
         label: const Text('Book'),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          _AppointmentList(
-            appointments: upcoming,
-            emptyMessage: 'No upcoming appointments',
-            emptySubtitle: 'Tap + to book one',
+      body: AsyncView(
+        value: allAsync,
+        onRetry: () => ref.invalidate(appointmentsProvider),
+        builder: (_) => RefreshIndicator(
+          onRefresh: () =>
+              ref.read(appointmentsProvider.notifier).refresh(),
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              _AppointmentList(
+                appointments: upcoming,
+                emptyMessage: 'No upcoming appointments',
+                emptySubtitle: 'Tap + to book one',
+              ),
+              _AppointmentList(
+                appointments: past,
+                emptyMessage: 'No past appointments',
+                emptySubtitle: 'Your appointment history will appear here',
+              ),
+            ],
           ),
-          _AppointmentList(
-            appointments: past,
-            emptyMessage: 'No past appointments',
-            emptySubtitle: 'Your appointment history will appear here',
-          ),
-        ],
+        ),
       ),
     );
   }

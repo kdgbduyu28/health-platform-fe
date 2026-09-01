@@ -1,85 +1,153 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../data/mock_data.dart';
+
 import '../models/appointment.dart';
 import '../models/appointment_status.dart';
+import 'catalog_provider.dart';
 import 'clinic_provider.dart';
+import 'supabase_providers.dart';
 
-class AppointmentsNotifier extends Notifier<List<Appointment>> {
+/// Every appointment the signed-in user is allowed to see.
+///
+/// There is no role filtering here on purpose — RLS decides the rows. A
+/// patient gets their own bookings across all three clinics, a doctor gets
+/// their clinic's, an assistant the same, and a signed-out caller gets
+/// nothing. The derived providers below only narrow that down for the UI.
+class AppointmentsNotifier extends AsyncNotifier<List<Appointment>> {
   @override
-  List<Appointment> build() => List.from(MockData.appointments);
-
-  void add(Appointment appointment) => state = [...state, appointment];
-
-  void updateStatus(String id, AppointmentStatus status) {
-    state = [for (final a in state) if (a.id == id) a.copyWith(status: status) else a];
+  Future<List<Appointment>> build() {
+    // Refetch when the session changes, so signing out cannot leave the
+    // previous user's appointments on screen.
+    ref.watch(currentUserIdProvider);
+    return ref.watch(healthRepositoryProvider).fetchAppointments();
   }
 
-  void updateNotes(String id, String notes) {
-    state = [for (final a in state) if (a.id == id) a.copyWith(notes: notes) else a];
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+      () => ref.read(healthRepositoryProvider).fetchAppointments(),
+    );
+  }
+
+  Future<void> book({
+    required String clinicId,
+    required String patientId,
+    required String doctorId,
+    required String serviceName,
+    required DateTime scheduledAt,
+    String? serviceId,
+    AppointmentStatus status = AppointmentStatus.pending,
+  }) async {
+    await ref.read(healthRepositoryProvider).book(
+          clinicId: clinicId,
+          patientId: patientId,
+          doctorId: doctorId,
+          serviceName: serviceName,
+          scheduledAt: scheduledAt,
+          serviceId: serviceId,
+          status: status,
+        );
+    await refresh();
+  }
+
+  Future<void> updateStatus(String id, AppointmentStatus status) async {
+    await ref.read(healthRepositoryProvider).updateStatus(id, status);
+    await refresh();
+  }
+
+  Future<void> updateNotes(String id, String notes) async {
+    await ref.read(healthRepositoryProvider).updateNotes(id, notes);
+    await refresh();
   }
 }
 
 final appointmentsProvider =
-    NotifierProvider<AppointmentsNotifier, List<Appointment>>(AppointmentsNotifier.new);
+    AsyncNotifierProvider<AppointmentsNotifier, List<Appointment>>(
+  AppointmentsNotifier.new,
+);
 
-final clinicAppointmentsProvider = Provider<List<Appointment>>((ref) {
+/// Appointments belonging to this build's clinic.
+final clinicAppointmentsProvider =
+    Provider<AsyncValue<List<Appointment>>>((ref) {
   final type = ref.watch(clinicTypeProvider);
-  return ref.watch(appointmentsProvider).where((a) => a.clinicType == type).toList();
+  return ref.watch(appointmentsProvider).whenData(
+        (list) => list.where((a) => a.clinicType == type).toList(),
+      );
 });
 
-final todayAppointmentsProvider = Provider<List<Appointment>>((ref) {
-  return ref
-      .watch(clinicAppointmentsProvider)
-      .where((a) => a.isToday)
-      .toList()
-    ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+final todayAppointmentsProvider =
+    Provider<AsyncValue<List<Appointment>>>((ref) {
+  return ref.watch(clinicAppointmentsProvider).whenData(
+        (list) => [...list.where((a) => a.isToday)]
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime)),
+      );
 });
 
-final upcomingAppointmentsProvider = Provider<List<Appointment>>((ref) {
+final upcomingAppointmentsProvider =
+    Provider<AsyncValue<List<Appointment>>>((ref) {
   final now = DateTime.now();
-  return ref
-      .watch(clinicAppointmentsProvider)
-      .where((a) => a.dateTime.isAfter(now) && a.status != AppointmentStatus.cancelled)
-      .toList()
-    ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+  return ref.watch(clinicAppointmentsProvider).whenData(
+        (list) => [
+          ...list.where((a) =>
+              a.dateTime.isAfter(now) &&
+              a.status != AppointmentStatus.cancelled)
+        ]..sort((a, b) => a.dateTime.compareTo(b.dateTime)),
+      );
 });
 
-// Patient-scoped views (patient_app uses pt1 – Juan dela Cruz as the current user)
-final currentPatientIdProvider = Provider<String>((ref) => 'pt1');
+// ── Patient-scoped views ────────────────────────────────────────────────────
+// RLS already limits a signed-in patient to their own rows; filtering by
+// patient id as well keeps these correct if a staff account ever opens the
+// patient app.
 
-final myAppointmentsProvider = Provider<List<Appointment>>((ref) {
-  final pid = ref.watch(currentPatientIdProvider);
-  return ref
-      .watch(clinicAppointmentsProvider)
-      .where((a) => a.patient.id == pid)
-      .toList()
-    ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+final myAppointmentsProvider =
+    Provider<AsyncValue<List<Appointment>>>((ref) {
+  final mine = ref.watch(myPatientProvider).value;
+  return ref.watch(clinicAppointmentsProvider).whenData((list) {
+    final rows = mine == null
+        ? [...list]
+        : [...list.where((a) => a.patient.id == mine.id)];
+    return rows..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+  });
 });
 
-final myUpcomingAppointmentsProvider = Provider<List<Appointment>>((ref) {
+final myUpcomingAppointmentsProvider =
+    Provider<AsyncValue<List<Appointment>>>((ref) {
   final now = DateTime.now();
+  return ref.watch(myAppointmentsProvider).whenData(
+        (list) => [
+          ...list.where((a) =>
+              a.dateTime.isAfter(now) &&
+              a.status != AppointmentStatus.cancelled)
+        ]..sort((a, b) => a.dateTime.compareTo(b.dateTime)),
+      );
+});
+
+// ── Doctor-scoped views ─────────────────────────────────────────────────────
+
+final myDoctorAppointmentsProvider =
+    Provider<AsyncValue<List<Appointment>>>((ref) {
+  final me = ref.watch(currentDoctorProvider).value;
+  return ref.watch(clinicAppointmentsProvider).whenData((list) {
+    final rows = me == null
+        ? [...list]
+        : [...list.where((a) => a.doctor.id == me.id)];
+    return rows..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+  });
+});
+
+final myDoctorTodayProvider = Provider<AsyncValue<List<Appointment>>>((ref) {
   return ref
-      .watch(myAppointmentsProvider)
-      .where((a) => a.dateTime.isAfter(now) && a.status != AppointmentStatus.cancelled)
-      .toList()
-    ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      .watch(myDoctorAppointmentsProvider)
+      .whenData((list) => list.where((a) => a.isToday).toList());
 });
 
-// Doctor-scoped views – doctor_app uses the first doctor of the active clinic type
-final currentDoctorProvider = Provider((ref) {
-  final type = ref.watch(clinicTypeProvider);
-  return MockData.doctors.firstWhere((d) => d.clinicType == type);
-});
-
-final myDoctorAppointmentsProvider = Provider<List<Appointment>>((ref) {
-  final doc = ref.watch(currentDoctorProvider);
-  return ref
-      .watch(clinicAppointmentsProvider)
-      .where((a) => a.doctor.id == doc.id)
-      .toList()
-    ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-});
-
-final myDoctorTodayProvider = Provider<List<Appointment>>((ref) {
-  return ref.watch(myDoctorAppointmentsProvider).where((a) => a.isToday).toList();
+/// Look up one appointment by id out of whatever is already loaded.
+final appointmentByIdProvider =
+    Provider.family<AsyncValue<Appointment?>, String>((ref, id) {
+  return ref.watch(appointmentsProvider).whenData((list) {
+    for (final a in list) {
+      if (a.id == id) return a;
+    }
+    return null;
+  });
 });

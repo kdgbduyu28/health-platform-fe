@@ -26,12 +26,17 @@ class _AdminAppointmentDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final appointments = ref.watch(appointmentsProvider);
-    final appointment = appointments.cast<Appointment?>().firstWhere(
-          (a) => a?.id == widget.appointmentId,
-          orElse: () => null,
-        );
+    final appointmentAsync =
+        ref.watch(appointmentByIdProvider(widget.appointmentId));
 
+    final guard = asyncGuard(
+      appointmentAsync,
+      appBar: AppBar(title: const Text('Appointment')),
+      onRetry: () => ref.invalidate(appointmentsProvider),
+    );
+    if (guard != null) return guard;
+
+    final appointment = appointmentAsync.requireValue;
     if (appointment == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Appointment')),

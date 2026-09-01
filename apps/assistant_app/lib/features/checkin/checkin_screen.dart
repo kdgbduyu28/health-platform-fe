@@ -16,9 +16,13 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
   @override
   Widget build(BuildContext context) {
     final clinicType = ref.watch(clinicTypeProvider);
-    final todayAppts = ref.watch(todayAppointmentsProvider);
+    final todayAsync = ref.watch(todayAppointmentsProvider);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
+    // Header stats need numbers before the list renders; empty is the honest
+    // stand-in while loading, and the list below still reports real errors.
+    final todayAppts = todayAsync.value ?? const <Appointment>[];
 
     final filtered = todayAppts.where((a) {
       if (_query.isEmpty) return true;
@@ -99,7 +103,17 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
               ],
             ),
           ),
-          if (filtered.isEmpty)
+          // "No appointments today" is only true once the data has actually
+          // arrived — while loading or after a failure it would be a lie.
+          if (!todayAsync.hasValue)
+            SliverFillRemaining(
+              child: AsyncView(
+                value: todayAsync,
+                onRetry: () => ref.invalidate(appointmentsProvider),
+                builder: (_) => const SizedBox.shrink(),
+              ),
+            )
+          else if (filtered.isEmpty)
             SliverFillRemaining(
               child: Center(
                 child: Column(

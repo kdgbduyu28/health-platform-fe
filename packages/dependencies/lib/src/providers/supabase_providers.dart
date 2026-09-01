@@ -1,0 +1,46 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../data/health_repository.dart';
+import '../models/profile.dart';
+
+final supabaseClientProvider = Provider<SupabaseClient>(
+  (ref) => Supabase.instance.client,
+);
+
+final healthRepositoryProvider = Provider<HealthRepository>(
+  (ref) => HealthRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// Emits on sign-in, sign-out, and token refresh. Supabase pushes the current
+/// session as soon as you subscribe, so this settles without an extra read.
+final authStateChangesProvider = StreamProvider<AuthState>(
+  (ref) => ref.watch(supabaseClientProvider).auth.onAuthStateChange,
+);
+
+/// The signed-in user, or null. Falls back to the client's cached session so
+/// the very first frame does not flash the sign-in screen for a user whose
+/// session was restored from storage.
+final currentUserProvider = Provider<User?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  final authState = ref.watch(authStateChangesProvider);
+  return authState.value?.session?.user ?? client.auth.currentUser;
+});
+
+/// Identity of the signed-in user as a plain value. Data providers watch this
+/// rather than the whole [User] so they refetch on sign-in/sign-out but not on
+/// every token refresh.
+final currentUserIdProvider = Provider<String?>(
+  (ref) => ref.watch(currentUserProvider)?.id,
+);
+
+final isSignedInProvider = Provider<bool>(
+  (ref) => ref.watch(currentUserIdProvider) != null,
+);
+
+/// The signed-in user's profile row, carrying the role that decides which
+/// parts of each app are usable.
+final myProfileProvider = FutureProvider<Profile?>((ref) {
+  ref.watch(currentUserIdProvider);
+  return ref.watch(healthRepositoryProvider).fetchMyProfile();
+});

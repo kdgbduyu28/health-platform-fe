@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:api_sdk/api_sdk.dart';
 import 'router.dart';
 
-class AdminApp extends ConsumerWidget {
+class AdminApp extends StatelessWidget {
   const AdminApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final clinicType = ref.watch(clinicTypeProvider);
-    return MaterialApp.router(
-      title: '${clinicType.clinicName} — Admin',
-      theme: buildClinicTheme(clinicType),
+  Widget build(BuildContext context) {
+    return ClinicAppShell(
+      appName: 'Admin',
       routerConfig: adminRouter,
-      debugShowCheckedModeBanner: false,
+      allowSignUp: false,
     );
   }
 }

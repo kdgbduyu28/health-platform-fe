@@ -10,10 +10,14 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final clinicType = ref.watch(clinicTypeProvider);
-    final todayAppts = ref.watch(todayAppointmentsProvider);
-    final allClinic = ref.watch(clinicAppointmentsProvider);
+    final todayAsync = ref.watch(todayAppointmentsProvider);
+    final allClinicAsync = ref.watch(clinicAppointmentsProvider);
+    final patientsAsync = ref.watch(patientsProvider);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
+    final todayAppts = todayAsync.value ?? const <Appointment>[];
+    final allClinic = allClinicAsync.value ?? const <Appointment>[];
 
     final pending =
         todayAppts.where((a) => a.status == AppointmentStatus.pending).length;
@@ -102,7 +106,7 @@ class DashboardScreen extends ConsumerWidget {
                     Expanded(
                       child: _BigStatCard(
                         label: 'Total Patients',
-                        value: MockData.patients.length,
+                        value: patientsAsync.value?.length ?? 0,
                         icon: Icons.group_outlined,
                       ),
                     ),
@@ -132,7 +136,13 @@ class DashboardScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                if (todayAppts.isEmpty)
+                if (!todayAsync.hasValue)
+                  AsyncView(
+                    value: todayAsync,
+                    onRetry: () => ref.invalidate(appointmentsProvider),
+                    builder: (_) => const SizedBox.shrink(),
+                  )
+                else if (todayAppts.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(

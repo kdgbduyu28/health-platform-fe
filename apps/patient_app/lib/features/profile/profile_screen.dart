@@ -8,9 +8,19 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final clinicType = ref.watch(clinicTypeProvider);
-    final patient = MockData.patients.first;
+    final profile = ref.watch(myProfileProvider).value;
+    final patient = ref.watch(myPatientProvider).value;
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+
+    // A patient chart is linked by the clinic, so an account can legitimately
+    // exist without one. Fall back to the profile for name and contact.
+    final displayName = patient?.name ?? profile?.fullName ?? '';
+    final initials = patient?.initials ?? profile?.initials ?? '?';
+    final phone = patient?.phone ?? profile?.phone ?? '—';
+    final email = patient?.email.isNotEmpty == true
+        ? patient!.email
+        : (profile?.email ?? '—');
 
     return Scaffold(
       body: CustomScrollView(
@@ -34,7 +44,7 @@ class ProfileScreen extends ConsumerWidget {
                       radius: 40,
                       backgroundColor: cs.onPrimary.withAlpha(50),
                       child: Text(
-                        patient.initials,
+                        initials,
                         style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
@@ -43,7 +53,7 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      patient.name,
+                      displayName,
                       style: theme.textTheme.titleLarge?.copyWith(
                           color: cs.onPrimary, fontWeight: FontWeight.bold),
                     ),
@@ -67,18 +77,18 @@ class ProfileScreen extends ConsumerWidget {
                     _ProfileTile(
                       icon: Icons.phone_outlined,
                       label: 'Phone',
-                      value: patient.phone,
+                      value: phone,
                     ),
                     _ProfileTile(
                       icon: Icons.email_outlined,
                       label: 'Email',
-                      value: patient.email,
+                      value: email,
                     ),
-                    if (patient.age != null)
+                    if (patient?.age != null)
                       _ProfileTile(
                         icon: Icons.cake_outlined,
                         label: 'Age',
-                        value: '${patient.age} years old',
+                        value: '${patient!.age} years old',
                       ),
                     const SizedBox(height: 24),
                     OutlinedButton.icon(
@@ -88,7 +98,11 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
-                      onPressed: () {},
+                      // Signing out clears the session, which drops every RLS
+                      // grant with it — the app shell then swaps the router
+                      // back to the sign-in screen on its own.
+                      onPressed: () =>
+                          ref.read(healthRepositoryProvider).signOut(),
                       style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red,
                           side: const BorderSide(color: Colors.red)),
