@@ -18,6 +18,7 @@ export 'src/providers/appointments_provider.dart';
 export 'src/providers/catalog_provider.dart';
 export 'src/providers/clinic_provider.dart';
 export 'src/providers/supabase_providers.dart';
+export 'src/theme/brand.dart';
 export 'src/theme/clinic_theme.dart';
 export 'src/widgets/appointment_card.dart';
 export 'src/widgets/async_view.dart';

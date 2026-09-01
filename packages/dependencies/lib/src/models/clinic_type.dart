@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/brand.dart';
+
 enum ClinicType {
   dental,
   optometry,
@@ -25,11 +27,20 @@ enum ClinicType {
     ClinicType.pedia => 'Little Stars Pediatrics',
   };
 
-  Color get seedColor => switch (this) {
-    ClinicType.dental => const Color(0xFF00897B),
-    ClinicType.optometry => const Color(0xFF1565C0),
-    ClinicType.pedia => const Color(0xFFE65100),
-  };
+  /// All three flavors share the D-Touch brown. The palette used to be a
+  /// different hue per clinic (teal / blue / orange), which predates having a
+  /// real brand to follow.
+  Color get seedColor => Brand.brown;
+
+  /// Whether this flavor may show the D-Touch lockup.
+  ///
+  /// The wordmark reads "DENTAL CLINIC", so putting it on the other two would
+  /// brand an eye clinic and a paediatric clinic as a dental practice. They
+  /// share the brown palette but keep their own name in text.
+  ///
+  /// If D-Touch takes over all three, this becomes `=> true` and the clinic
+  /// names in the database change to match.
+  bool get isDTouchBranded => this == ClinicType.dental;
 
   IconData get icon => switch (this) {
     ClinicType.dental => Icons.medical_services_outlined,

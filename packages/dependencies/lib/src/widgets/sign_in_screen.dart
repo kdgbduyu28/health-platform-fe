@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/clinic_type.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/supabase_providers.dart';
+import '../theme/brand.dart';
 import 'async_view.dart';
 
 /// Shared sign-in for all four apps.
@@ -209,32 +210,41 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
     return Column(
       children: [
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [cs.primary, cs.secondary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        if (clinicType.isDTouchBranded)
+          // The lockup already carries the clinic name, so repeating it as
+          // text underneath would just say the same thing twice.
+          const BrandWordmark(height: 88)
+        else ...[
+          // Other flavors are not D-Touch, so they get the shared palette but
+          // their own name rather than a dental practice's wordmark.
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [cs.primary, cs.secondary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
             ),
-            borderRadius: BorderRadius.circular(20),
+            child: Icon(clinicType.icon, size: 36, color: cs.onPrimary),
           ),
-          child: Icon(clinicType.icon, size: 36, color: cs.onPrimary),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          clinicType.clinicName,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
+          const SizedBox(height: 16),
+          Text(
+            clinicType.clinicName,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ],
+        const SizedBox(height: 8),
         Text(
           appName,
-          style: TextStyle(color: cs.onSurfaceVariant),
+          style: TextStyle(color: cs.onSurfaceVariant, letterSpacing: 0.5),
         ),
       ],
     );
