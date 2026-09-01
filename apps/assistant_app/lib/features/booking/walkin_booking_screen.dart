@@ -190,32 +190,17 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
 
     setState(() => _busy = true);
     try {
-      // Register the chart first, then book against it. The patient row is
-      // stamped with this clinic, which is exactly what lets RLS hand the row
-      // straight back to us — an appointment-only visibility rule would make
-      // the record we just created unreadable.
-      //
-      // Known gap: these are two statements, not one transaction. If the
-      // booking loses the double-booking race the patient record survives
-      // without an appointment. Folding both into a Postgres function called
-      // over RPC would make it atomic.
-      final patient =
-          await ref.read(healthRepositoryProvider).createWalkInPatient(
-                clinicId: clinicId,
-                fullName: _nameCtrl.text.trim(),
-                phone: _phoneCtrl.text.trim(),
-              );
-
-      // Staff may book straight to confirmed; RLS only forces 'pending' on
-      // bookings made by patients themselves.
-      await ref.read(appointmentsProvider.notifier).book(
+      // One RPC, one transaction. Registering the chart and booking against
+      // it as two separate client writes left an orphan patient behind
+      // whenever the booking lost the double-booking race.
+      await ref.read(appointmentsProvider.notifier).bookWalkIn(
             clinicId: clinicId,
-            patientId: patient.id,
+            fullName: _nameCtrl.text.trim(),
+            phone: _phoneCtrl.text.trim(),
             doctorId: doctor.id,
             serviceId: service.id,
             serviceName: service.name,
             scheduledAt: scheduledAt,
-            status: AppointmentStatus.confirmed,
           );
 
       if (!context.mounted) return;
@@ -224,7 +209,7 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
         builder: (ctx) => AlertDialog(
           title: const Text('Booked!'),
           content: Text(
-            '${patient.name} is booked for ${service.name} at '
+            '${_nameCtrl.text.trim()} is booked for ${service.name} at '
             '${DateFormat('h:mm a').format(scheduledAt)} '
             'with Dr. ${doctor.name}.',
           ),

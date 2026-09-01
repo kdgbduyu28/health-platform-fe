@@ -1,0 +1,10 @@
+# Single-page app fallback.
+#
+# go_router owns routes like /appointments/:id and /appointments/book, which
+# exist only in the client. Without this, a hard refresh or a shared deep link
+# asks Netlify for a file that was never built and gets a 404 — the app only
+# ever worked when entered through /.
+#
+# 200 (rewrite), not 301/302: the browser keeps the original URL so go_router
+# can still read the route it was asked for.
+/*    /index.html    200

@@ -49,6 +49,32 @@ class AppointmentsNotifier extends AsyncNotifier<List<Appointment>> {
     await refresh();
   }
 
+  /// Registers a walk-in and books them in one transaction. Returns the new
+  /// appointment id.
+  Future<String> bookWalkIn({
+    required String clinicId,
+    required String fullName,
+    required String phone,
+    required String doctorId,
+    required String serviceName,
+    required DateTime scheduledAt,
+    String? serviceId,
+    String? email,
+  }) async {
+    final id = await ref.read(healthRepositoryProvider).bookWalkIn(
+          clinicId: clinicId,
+          fullName: fullName,
+          phone: phone,
+          doctorId: doctorId,
+          serviceName: serviceName,
+          scheduledAt: scheduledAt,
+          serviceId: serviceId,
+          email: email,
+        );
+    await refresh();
+    return id;
+  }
+
   Future<void> updateStatus(String id, AppointmentStatus status) async {
     await ref.read(healthRepositoryProvider).updateStatus(id, status);
     await refresh();

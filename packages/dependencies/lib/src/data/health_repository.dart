@@ -133,26 +133,36 @@ class HealthRepository {
   Future<void> updateNotes(String appointmentId, String notes) =>
       _db.from('appointments').update({'notes': notes}).eq('id', appointmentId);
 
-  /// Registers a walk-in. [clinicId] is mandatory — RLS requires the record be
-  /// stamped with a clinic the caller actually staffs, which is also what makes
-  /// the row readable back to them straight away.
-  Future<Patient> createWalkInPatient({
+  /// Registers a walk-in and books their appointment in one transaction,
+  /// returning the new appointment id.
+  ///
+  /// Done as two client-side writes this leaves an orphan chart behind
+  /// whenever the booking loses the double-booking race — a patient who was
+  /// never actually booked. The `book_walk_in` function runs both inserts in a
+  /// single transaction so it is all-or-nothing. It is SECURITY INVOKER, so
+  /// RLS still decides whether this caller may register a patient at this
+  /// clinic at all.
+  Future<String> bookWalkIn({
     required String clinicId,
     required String fullName,
     required String phone,
+    required String doctorId,
+    required String serviceName,
+    required DateTime scheduledAt,
+    String? serviceId,
     String? email,
   }) async {
-    final row = await _db
-        .from('patients')
-        .insert({
-          'registered_clinic_id': clinicId,
-          'full_name': fullName,
-          'phone': phone,
-          if (email != null && email.isNotEmpty) 'email': email,
-        })
-        .select()
-        .single();
-    return Patient.fromJson(row);
+    final id = await _db.rpc('book_walk_in', params: {
+      'p_clinic_id': clinicId,
+      'p_full_name': fullName,
+      'p_phone': phone,
+      'p_doctor_id': doctorId,
+      'p_service_name': serviceName,
+      'p_scheduled_at': scheduledAt.toUtc().toIso8601String(),
+      'p_service_id': serviceId,
+      'p_email': email,
+    });
+    return id as String;
   }
 
   Future<void> updateMyProfile({String? fullName, String? phone}) async {
