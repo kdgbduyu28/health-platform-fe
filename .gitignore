@@ -1,0 +1,13 @@
+# macOS Finder metadata. Two of these were committed before this file
+# existed; they are untracked in the same commit that adds this rule.
+.DS_Store
+
+# Local IDE/tooling cache, regenerated on every `flutter pub get`.
+#
+# Scoped to this one subdirectory rather than all of .dart_tool/, because the
+# workspace deliberately tracks package_config.json, package_graph.json and the
+# melos snapshot — ignoring the whole directory would misrepresent what the
+# repo actually keeps.
+.dart_tool/extension_discovery/
+
+# Build output is already covered by each app's own .gitignore.
