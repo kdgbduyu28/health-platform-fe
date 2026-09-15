@@ -7,7 +7,9 @@ Future<void> main() async {
   await initializeHealthPlatform();
   runApp(
     ProviderScope(
-      overrides: [clinicTypeProvider.overrideWithValue(ClinicType.dental)],
+      // The only thing a build decides is which app it is. Which clinic it
+      // shows comes from whoever signs in.
+      overrides: [appRoleProvider.overrideWithValue(AppRole.doctor)],
       child: const DoctorApp(),
     ),
   );

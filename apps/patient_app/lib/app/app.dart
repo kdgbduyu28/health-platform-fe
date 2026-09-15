@@ -10,7 +10,6 @@ class PatientApp extends StatelessWidget {
     return ClinicAppShell(
       appName: 'Patient',
       routerConfig: patientRouter,
-      allowSignUp: true,
     );
   }
 }

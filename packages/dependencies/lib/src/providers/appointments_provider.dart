@@ -9,9 +9,9 @@ import 'supabase_providers.dart';
 /// Every appointment the signed-in user is allowed to see.
 ///
 /// There is no role filtering here on purpose — RLS decides the rows. A
-/// patient gets their own bookings across all three clinics, a doctor gets
-/// their clinic's, an assistant the same, and a signed-out caller gets
-/// nothing. The derived providers below only narrow that down for the UI.
+/// patient gets their own bookings at every clinic they have joined, staff get
+/// the bookings of every clinic they work at, and a signed-out caller gets
+/// nothing. The derived providers below narrow that to the current clinic.
 class AppointmentsNotifier extends AsyncNotifier<List<Appointment>> {
   @override
   Future<List<Appointment>> build() {
@@ -91,12 +91,12 @@ final appointmentsProvider =
   AppointmentsNotifier.new,
 );
 
-/// Appointments belonging to this build's clinic.
+/// Appointments at the clinic the app is currently showing.
 final clinicAppointmentsProvider =
     Provider<AsyncValue<List<Appointment>>>((ref) {
-  final type = ref.watch(clinicTypeProvider);
+  final clinicId = ref.watch(currentClinicIdProvider);
   return ref.watch(appointmentsProvider).whenData(
-        (list) => list.where((a) => a.clinicType == type).toList(),
+        (list) => list.where((a) => a.clinicId == clinicId).toList(),
       );
 });
 

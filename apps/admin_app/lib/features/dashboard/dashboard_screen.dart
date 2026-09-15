@@ -9,7 +9,6 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final clinicType = ref.watch(clinicTypeProvider);
     final todayAsync = ref.watch(todayAppointmentsProvider);
     final allClinicAsync = ref.watch(clinicAppointmentsProvider);
     final patientsAsync = ref.watch(patientsProvider);
@@ -36,7 +35,7 @@ class DashboardScreen extends ConsumerWidget {
                 Text('Admin Dashboard',
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(color: cs.onSurfaceVariant)),
-                Text(clinicType.clinicName,
+                ClinicTitle(
                     style: theme.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
               ],

@@ -1,69 +1,96 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/app_role.dart';
 import '../models/appointment.dart';
 import '../models/appointment_status.dart';
 import '../models/clinic.dart';
-import '../models/clinic_type.dart';
 import '../models/doctor.dart';
+import '../models/membership.dart';
 import '../models/patient.dart';
 import '../models/profile.dart';
 import '../models/service.dart';
 
 /// Every Supabase call the apps make lives here.
 ///
-/// Nothing in this class filters by role or clinic. It does not need to: the
-/// Row Level Security policies in health-platform-be already scope each query
-/// to what the signed-in user may see, so `select()` returns a patient's own
-/// appointments, a doctor's clinic's appointments, or nothing at all, purely
-/// from who is holding the session.
+/// Nothing in this class decides what a user is ALLOWED to see. Row Level
+/// Security in health-platform-be already scopes each query to the signed-in
+/// user: their own charts, the clinics they belong to, and nothing of any other
+/// tenant. The clinic filters that do appear below only pick ONE clinic out of
+/// several a user legitimately belongs to.
 class HealthRepository {
   HealthRepository(this._db);
 
   final SupabaseClient _db;
 
-  /// Embeds needed to build an [Appointment]. The FK names are unambiguous
-  /// because migration 20260818100000 removed the duplicate relationships.
+  static const _clinicSelect =
+      '*, clinic_type:clinic_types(display_name, icon_name)';
+
+  static const _patientSelect = '*, person:persons(*)';
+
+  /// Each embed has exactly one foreign key behind it — PostgREST refuses to
+  /// embed across two (PGRST201), which is why the migrations drop redundant
+  /// single-column FKs whenever they add a composite one.
   static const _appointmentSelect =
-      '*, clinic:clinics(type), patient:patients(*), '
-      'doctor:doctors(*, clinic:clinics(type))';
+      '*, patient:patients(*, person:persons(*)), doctor:doctors(*)';
+
+  String? get _uid => _db.auth.currentUser?.id;
 
   // ── Reads ─────────────────────────────────────────────────────────────────
 
+  /// Every clinic this user belongs to, as staff or as a patient. RLS does the
+  /// scoping; a signed-in user attached to nothing gets an empty list.
   Future<List<Clinic>> fetchClinics() async {
-    final rows = await _db.from('clinics').select();
+    final rows = await _db.from('clinics').select(_clinicSelect).order('name');
     return rows.map((r) => Clinic.fromJson(r)).toList();
   }
 
   Future<Profile?> fetchMyProfile() async {
-    final uid = _db.auth.currentUser?.id;
+    final uid = _uid;
     if (uid == null) return null;
     final row =
         await _db.from('profiles').select().eq('id', uid).maybeSingle();
     return row == null ? null : Profile.fromJson(row);
   }
 
-  /// The patient chart belonging to the signed-in account, if one is linked.
-  Future<Patient?> fetchMyPatient() async {
-    final uid = _db.auth.currentUser?.id;
-    if (uid == null) return null;
-    final row = await _db
-        .from('patients')
-        .select()
-        .eq('profile_id', uid)
-        .maybeSingle();
-    return row == null ? null : Patient.fromJson(row);
+  /// The signed-in account's staff roles, one per clinic.
+  Future<List<ClinicMembership>> fetchMyMemberships() async {
+    final uid = _uid;
+    if (uid == null) return const [];
+    final rows = await _db
+        .from('clinic_memberships')
+        .select('profile_id, clinic_id, role')
+        .eq('profile_id', uid);
+    return rows.map((r) => ClinicMembership.fromJson(r)).toList();
   }
 
-  /// The roster row for a signed-in doctor, if one is linked.
-  Future<Doctor?> fetchMyDoctor() async {
-    final uid = _db.auth.currentUser?.id;
-    if (uid == null) return null;
-    final row = await _db
-        .from('doctors')
-        .select('*, clinic:clinics(type)')
+  /// Every chart the signed-in account holds — one per clinic joined.
+  ///
+  /// Two steps rather than one filtered embed: staff can also read the charts
+  /// at their clinics, so "patients I can see" is not "my charts". Filtering on
+  /// the person's account link is what separates the two.
+  Future<List<Patient>> fetchMyPatients() async {
+    final uid = _uid;
+    if (uid == null) return const [];
+    final person = await _db
+        .from('persons')
+        .select('id')
         .eq('profile_id', uid)
         .maybeSingle();
-    return row == null ? null : Doctor.fromJson(row);
+    if (person == null) return const [];
+    final rows = await _db
+        .from('patients')
+        .select(_patientSelect)
+        .eq('person_id', person['id'] as String);
+    return rows.map((r) => Patient.fromJson(r)).toList();
+  }
+
+  /// Roster rows linked to the signed-in account — one per clinic they
+  /// practise at.
+  Future<List<Doctor>> fetchMyDoctors() async {
+    final uid = _uid;
+    if (uid == null) return const [];
+    final rows = await _db.from('doctors').select().eq('profile_id', uid);
+    return rows.map((r) => Doctor.fromJson(r)).toList();
   }
 
   Future<List<Appointment>> fetchAppointments() async {
@@ -77,7 +104,7 @@ class HealthRepository {
   Future<List<Doctor>> fetchDoctors(String clinicId) async {
     final rows = await _db
         .from('doctors')
-        .select('*, clinic:clinics(type)')
+        .select()
         .eq('clinic_id', clinicId)
         .eq('is_active', true)
         .order('full_name');
@@ -94,9 +121,26 @@ class HealthRepository {
     return rows.map((r) => Service.fromJson(r)).toList();
   }
 
-  Future<List<Patient>> fetchPatients() async {
-    final rows = await _db.from('patients').select().order('full_name');
-    return rows.map((r) => Patient.fromJson(r)).toList();
+  /// The charts held at [clinicId], sorted by name. Sorted here because
+  /// ordering by an embedded column orders the embed, not the charts.
+  Future<List<Patient>> fetchPatients(String clinicId) async {
+    final rows = await _db
+        .from('patients')
+        .select(_patientSelect)
+        .eq('clinic_id', clinicId);
+    return rows.map((r) => Patient.fromJson(r)).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  /// Everyone on staff at [clinicId], with their name and email. Readable by
+  /// the clinic's admins.
+  Future<List<ClinicMembership>> fetchStaff(String clinicId) async {
+    final rows = await _db
+        .from('clinic_memberships')
+        .select('profile_id, clinic_id, role, profile:profiles(full_name, email)')
+        .eq('clinic_id', clinicId);
+    return rows.map((r) => ClinicMembership.fromJson(r)).toList()
+      ..sort((a, b) => (a.fullName ?? '').compareTo(b.fullName ?? ''));
   }
 
   // ── Writes ────────────────────────────────────────────────────────────────
@@ -136,12 +180,10 @@ class HealthRepository {
   /// Registers a walk-in and books their appointment in one transaction,
   /// returning the new appointment id.
   ///
-  /// Done as two client-side writes this leaves an orphan chart behind
-  /// whenever the booking loses the double-booking race — a patient who was
-  /// never actually booked. The `book_walk_in` function runs both inserts in a
-  /// single transaction so it is all-or-nothing. It is SECURITY INVOKER, so
-  /// RLS still decides whether this caller may register a patient at this
-  /// clinic at all.
+  /// The `book_walk_in` function creates the person, their chart at this
+  /// clinic, and the appointment together, so losing the double-booking race
+  /// leaves nothing half-made behind. It is SECURITY INVOKER, so RLS still
+  /// decides whether this caller may register a patient at this clinic at all.
   Future<String> bookWalkIn({
     required String clinicId,
     required String fullName,
@@ -166,7 +208,7 @@ class HealthRepository {
   }
 
   Future<void> updateMyProfile({String? fullName, String? phone}) async {
-    final uid = _db.auth.currentUser?.id;
+    final uid = _uid;
     if (uid == null) return;
     await _db.from('profiles').update({
       if (fullName != null) 'full_name': fullName,
@@ -174,11 +216,57 @@ class HealthRepository {
     }).eq('id', uid);
   }
 
+  // ── Onboarding ────────────────────────────────────────────────────────────
+
+  /// Attaches the signed-in account to the clinic with this code, creating
+  /// their chart there. Returns the clinic id. Safe to repeat.
+  Future<String> joinClinic(String code) async {
+    final id = await _db.rpc('join_clinic', params: {'p_join_code': code});
+    return id as String;
+  }
+
+  /// Grants [role] at [clinicId] to the account registered under [email].
+  /// Admin-only; the account must already exist.
+  Future<void> inviteStaff({
+    required String clinicId,
+    required String email,
+    required AppRole role,
+  }) =>
+      _db.rpc('invite_staff', params: {
+        'p_clinic_id': clinicId,
+        'p_email': email,
+        'p_role': role.wire,
+      });
+
+  Future<void> removeStaff({
+    required String clinicId,
+    required String profileId,
+  }) =>
+      _db.rpc('remove_staff', params: {
+        'p_clinic_id': clinicId,
+        'p_profile_id': profileId,
+      });
+
+  /// Updates the clinic's own presentation and contact details. The database
+  /// only lets an admin write those columns — name, logo, colour, contact,
+  /// timezone, join code — and not the clinic's type, slug or active status.
+  Future<void> updateClinic(String clinicId, Map<String, Object?> changes) =>
+      _db.from('clinics').update(changes).eq('id', clinicId);
+
+  /// Issues a fresh join code, invalidating the old one. Returns the new code.
+  Future<String> rotateJoinCode(String clinicId) async {
+    final code =
+        await _db.rpc('rotate_join_code', params: {'p_clinic_id': clinicId});
+    return code as String;
+  }
+
   // ── Auth ──────────────────────────────────────────────────────────────────
 
   Future<void> signIn(String email, String password) =>
       _db.auth.signInWithPassword(email: email, password: password);
 
+  /// Creates an account and nothing else. Access is granted separately: a
+  /// patient joins a clinic with its code, staff are added by a clinic admin.
   Future<void> signUp(String email, String password, String fullName) =>
       _db.auth.signUp(
         email: email,
@@ -187,14 +275,4 @@ class HealthRepository {
       );
 
   Future<void> signOut() => _db.auth.signOut();
-}
-
-/// Maps a [ClinicType] onto its database row.
-extension ClinicLookup on List<Clinic> {
-  Clinic? byType(ClinicType type) {
-    for (final c in this) {
-      if (c.type == type) return c;
-    }
-    return null;
-  }
 }

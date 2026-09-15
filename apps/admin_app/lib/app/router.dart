@@ -4,6 +4,7 @@ import '../features/dashboard/dashboard_screen.dart';
 import '../features/schedule/schedule_screen.dart';
 import '../features/appointments/appointment_detail_screen.dart';
 import '../features/patients/patients_screen.dart';
+import '../features/clinic/clinic_settings_screen.dart';
 
 final adminRouter = GoRouter(
   initialLocation: '/',
@@ -24,6 +25,9 @@ final adminRouter = GoRouter(
         ]),
         StatefulShellBranch(routes: [
           GoRoute(path: '/patients', builder: (_, __) => const PatientsScreen()),
+        ]),
+        StatefulShellBranch(routes: [
+          GoRoute(path: '/clinic', builder: (_, __) => const ClinicSettingsScreen()),
         ]),
       ],
     ),
@@ -57,6 +61,11 @@ class _NavScaffold extends StatelessWidget {
             icon: Icon(Icons.group_outlined),
             selectedIcon: Icon(Icons.group),
             label: 'Patients',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront),
+            label: 'Clinic',
           ),
         ],
       ),

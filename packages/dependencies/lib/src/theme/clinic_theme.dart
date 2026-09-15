@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
-import '../models/clinic_type.dart';
 
-ThemeData buildClinicTheme(ClinicType type) {
+import '../models/clinic.dart';
+import 'brand.dart';
+
+/// The app theme for [clinic], or the platform theme when there is no clinic
+/// yet (signed out) or the clinic has not set a colour.
+ThemeData buildClinicTheme(Clinic? clinic) {
   return ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: type.seedColor,
+      seedColor: clinic?.seedColor ?? Brand.platformSeed,
       brightness: Brightness.light,
     ),
     appBarTheme: const AppBarTheme(

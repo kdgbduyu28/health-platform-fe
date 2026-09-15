@@ -114,14 +114,14 @@ class _BookAppointmentScreenState
       return;
     }
 
-    // A signup creates an account and a profile, but not a patient chart —
-    // that link is made by the clinic. Without it there is no patient_id to
-    // book against, and RLS would reject the insert anyway.
+    // The app only opens once this account holds a chart at the current
+    // clinic, so this guards a stale session rather than a normal path —
+    // without a chart there is no patient_id to book against.
     if (patient == null) {
       messenger.showSnackBar(const SnackBar(
         content: Text(
-          'Your account is not linked to a patient record yet. '
-          'Please contact the clinic.',
+          'You have not joined this clinic yet. '
+          'Join it from your profile with the clinic\'s code.',
         ),
         behavior: SnackBarBehavior.floating,
       ));

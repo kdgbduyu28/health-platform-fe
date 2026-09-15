@@ -1,8 +1,8 @@
 /// A bookable service from `public.services`.
 ///
-/// This replaces the hardcoded `ClinicType.services` list: the catalogue is now
-/// per-clinic data an admin can edit, rather than a constant compiled into the
-/// apps.
+/// The catalogue is per-clinic data an admin can edit, rather than a constant
+/// compiled into the apps — two clinics of the same kind offer different
+/// services.
 class Service {
   const Service({
     required this.id,

@@ -1,48 +1,63 @@
+/// A patient chart: one person's record at ONE clinic.
+///
+/// The database keeps identity and clinical content apart. `persons` holds who
+/// someone is (name, phone, date of birth) and is shared by every clinic that
+/// treats them; `patients` holds the chart (clinical notes) and belongs to a
+/// single clinic, which is what stops one clinic reading another's notes.
+///
+/// The screens want one object per patient, so the person is embedded and
+/// flattened here:
+///
+///   patients?select=*,person:persons(*)
 class Patient {
   const Patient({
     required this.id,
+    required this.personId,
+    required this.clinicId,
     required this.name,
     required this.phone,
     required this.email,
     this.dateOfBirth,
     this.medicalNotes,
-    this.profileId,
-    this.registeredClinicId,
   });
 
+  /// The chart id — what appointments point at.
   final String id;
+  final String personId;
+  final String clinicId;
+
   final String name;
   final String phone;
   final String email;
   final DateTime? dateOfBirth;
+
+  /// Clinic-private. Never follows the person to another clinic.
   final String? medicalNotes;
 
-  /// The `auth.users` account this chart belongs to, if any. Walk-ins
-  /// registered by an assistant have no account, so this stays null.
-  final String? profileId;
-
-  /// The clinic holding this chart. Drives who on staff can read the record.
-  final String? registeredClinicId;
-
-  /// `patients.email` is nullable in Postgres but the UI treats it as a plain
-  /// string, so an absent address becomes empty rather than null.
-  factory Patient.fromJson(Map<String, dynamic> json) => Patient(
-        id: json['id'] as String,
-        name: json['full_name'] as String,
-        phone: json['phone'] as String? ?? '',
-        email: json['email'] as String? ?? '',
-        dateOfBirth: json['date_of_birth'] == null
-            ? null
-            : DateTime.parse(json['date_of_birth'] as String),
-        medicalNotes: json['medical_notes'] as String?,
-        profileId: json['profile_id'] as String?,
-        registeredClinicId: json['registered_clinic_id'] as String?,
-      );
+  /// Nullable person columns become empty strings, because the UI treats them
+  /// as plain text; a missing embed degrades the same way rather than crashing.
+  factory Patient.fromJson(Map<String, dynamic> json) {
+    final person =
+        json['person'] as Map<String, dynamic>? ?? const <String, dynamic>{};
+    return Patient(
+      id: json['id'] as String,
+      personId: json['person_id'] as String,
+      clinicId: json['clinic_id'] as String,
+      name: person['full_name'] as String? ?? '',
+      phone: person['phone'] as String? ?? '',
+      email: person['email'] as String? ?? '',
+      dateOfBirth: person['date_of_birth'] == null
+          ? null
+          : DateTime.parse(person['date_of_birth'] as String),
+      medicalNotes: json['medical_notes'] as String?,
+    );
+  }
 
   String get initials {
-    final parts = name.split(' ');
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (name.trim().isEmpty) return '?';
     if (parts.length >= 2) return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-    return name[0].toUpperCase();
+    return parts.first[0].toUpperCase();
   }
 
   int? get age {

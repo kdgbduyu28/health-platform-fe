@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 /// Renders an [AsyncValue] with consistent loading and error states.
 ///
@@ -132,6 +133,13 @@ class _ErrorView extends StatelessWidget {
 /// Turns Supabase's exception types into something a clinic receptionist could
 /// act on, instead of a raw stack trace.
 String describeError(Object error) {
+  // The database functions (join_clinic, invite_staff, book_walk_in, …) raise
+  // messages written for the person using the app: "that clinic code is not
+  // valid", "a clinic must keep at least one admin". Plain RAISE EXCEPTION
+  // arrives as SQLSTATE P0001 — show its message, not the exception wrapper.
+  if (error is PostgrestException && error.code == 'P0001') {
+    return error.message;
+  }
   final text = error.toString();
   if (text.contains('SocketException') || text.contains('Failed host lookup')) {
     return 'No connection. Check your network and try again.';

@@ -23,7 +23,7 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final clinicType = ref.watch(clinicTypeProvider);
+    final clinic = ref.watch(currentClinicProvider).value;
     final doctorAsync = ref.watch(currentDoctorProvider);
     final todayAsync = ref.watch(myDoctorTodayProvider);
     final allAsync = ref.watch(myDoctorAppointmentsProvider);
@@ -50,9 +50,13 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Welcome back',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: cs.onSurfaceVariant)),
+                // Doctors may practise at several clinics; the clinic line is
+                // also where they switch between them.
+                ClinicTitle(
+                  markSize: 20,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: cs.onSurfaceVariant),
+                ),
                 Text(doctor == null ? 'Doctor' : 'Dr. ${doctor.name}',
                     style: theme.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
@@ -70,11 +74,11 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(clinicType.icon,
+                    Icon(clinic?.icon ?? Icons.local_hospital_outlined,
                         size: 16, color: cs.onPrimaryContainer),
                     const SizedBox(width: 4),
                     Text(
-                      doctor?.specialty ?? clinicType.displayName,
+                      doctor?.specialty ?? clinic?.typeName ?? '',
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,

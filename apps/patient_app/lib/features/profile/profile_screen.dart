@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:api_sdk/api_sdk.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -7,14 +8,14 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final clinicType = ref.watch(clinicTypeProvider);
+    final clinic = ref.watch(currentClinicProvider).value;
     final profile = ref.watch(myProfileProvider).value;
     final patient = ref.watch(myPatientProvider).value;
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
 
-    // A patient chart is linked by the clinic, so an account can legitimately
-    // exist without one. Fall back to the profile for name and contact.
+    // Name and contact come from the person record behind this clinic's chart
+    // — what the clinic itself sees. The profile stands in while that loads.
     final displayName = patient?.name ?? profile?.fullName ?? '';
     final initials = patient?.initials ?? profile?.initials ?? '?';
     final phone = patient?.phone ?? profile?.phone ?? '—';
@@ -58,7 +59,7 @@ class ProfileScreen extends ConsumerWidget {
                           color: cs.onPrimary, fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      clinicType.clinicName,
+                      clinic?.name ?? '',
                       style: TextStyle(
                           color: cs.onPrimary.withAlpha(200), fontSize: 13),
                     ),
@@ -91,6 +92,12 @@ class ProfileScreen extends ConsumerWidget {
                         value: '${patient!.age} years old',
                       ),
                     const SizedBox(height: 24),
+                    OutlinedButton.icon(
+                      onPressed: () => context.push('/join'),
+                      icon: const Icon(Icons.add_business_outlined),
+                      label: const Text('Join another clinic'),
+                    ),
+                    const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () {},
                       icon: const Icon(Icons.edit_outlined),

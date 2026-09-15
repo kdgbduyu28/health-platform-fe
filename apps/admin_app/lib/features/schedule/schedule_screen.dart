@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
+import '../../widgets/clinic_page_title.dart';
 
 class ScheduleScreen extends ConsumerStatefulWidget {
   const ScheduleScreen({super.key});
@@ -38,7 +39,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Schedule'),
+        title: const ClinicPageTitle('Schedule'),
         actions: [
           IconButton(
             icon: const Icon(Icons.today),

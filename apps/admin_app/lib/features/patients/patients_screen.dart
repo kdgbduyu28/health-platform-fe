@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:api_sdk/api_sdk.dart';
+import '../../widgets/clinic_page_title.dart';
 
 class PatientsScreen extends ConsumerStatefulWidget {
   const PatientsScreen({super.key});
@@ -18,8 +19,8 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
     final patientsAsync = ref.watch(patientsProvider);
     final appointmentsAsync = ref.watch(clinicAppointmentsProvider);
 
-    // RLS already limits this to the clinic's roster plus anyone referred in,
-    // so the search only has to narrow what the database already allowed.
+    // These are the charts held at this clinic — RLS allows nothing else — so
+    // the search only has to narrow what the database already allowed.
     final allAppointments = appointmentsAsync.value ?? const <Appointment>[];
     final patients = (patientsAsync.value ?? const <Patient>[]).where((p) {
       if (_query.isEmpty) return true;
@@ -30,7 +31,7 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Patients')),
+      appBar: AppBar(title: const ClinicPageTitle('Patients')),
       body: Column(
         children: [
           Padding(

@@ -10,7 +10,6 @@ class AssistantApp extends StatelessWidget {
     return ClinicAppShell(
       appName: 'Assistant',
       routerConfig: assistantRouter,
-      allowSignUp: false,
     );
   }
 }

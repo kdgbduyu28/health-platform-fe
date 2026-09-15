@@ -1,25 +1,24 @@
-import 'app_role.dart';
-
 /// A row from `public.profiles` — the 1:1 companion to the `auth.users` record
 /// for the signed-in account.
+///
+/// A profile is just an account. What it may do is decided per clinic: by a
+/// membership for staff (see [ClinicMembership]) or by holding a chart there
+/// for patients.
 class Profile {
   const Profile({
     required this.id,
-    required this.role,
     required this.fullName,
     this.email,
     this.phone,
   });
 
   final String id;
-  final AppRole role;
   final String fullName;
   final String? email;
   final String? phone;
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
         id: json['id'] as String,
-        role: AppRole.fromWire(json['role'] as String),
         fullName: json['full_name'] as String,
         email: json['email'] as String?,
         phone: json['phone'] as String?,

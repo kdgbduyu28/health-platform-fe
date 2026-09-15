@@ -64,7 +64,8 @@ class AppointmentDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  appointment.clinicType.clinicName,
+                  ref.watch(clinicByIdProvider(appointment.clinicId))?.name ??
+                      '',
                   style: TextStyle(
                       color: cs.onPrimary.withAlpha(200), fontSize: 13),
                 ),

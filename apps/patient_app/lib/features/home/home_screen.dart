@@ -9,7 +9,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final clinicType = ref.watch(clinicTypeProvider);
+    final clinic = ref.watch(currentClinicProvider).value;
     final upcomingAsync = ref.watch(myUpcomingAppointmentsProvider);
     final profile = ref.watch(myProfileProvider).value;
     final theme = Theme.of(context);
@@ -27,8 +27,7 @@ class HomeScreen extends ConsumerWidget {
                   style: theme.textTheme.bodyMedium
                       ?.copyWith(color: cs.onSurfaceVariant),
                 ),
-                Text(
-                  clinicType.clinicName,
+                ClinicTitle(
                   style: theme.textTheme.headlineSmall
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),
@@ -46,11 +45,11 @@ class HomeScreen extends ConsumerWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(clinicType.icon,
+                    Icon(clinic?.icon ?? Icons.local_hospital_outlined,
                         size: 16, color: cs.onPrimaryContainer),
                     const SizedBox(width: 4),
                     Text(
-                      clinicType.displayName,
+                      clinic?.typeName ?? '',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -77,7 +76,8 @@ class HomeScreen extends ConsumerWidget {
                           context.push('/appointments/${upcoming.first.id}'),
                     )
                   else
-                    _EmptyCard(clinicType: clinicType),
+                    _EmptyCard(
+                        icon: clinic?.icon ?? Icons.local_hospital_outlined),
                   const SizedBox(height: 16),
                   FilledButton.icon(
                     onPressed: () => context.push('/appointments/book'),
@@ -216,8 +216,8 @@ class _Chip extends StatelessWidget {
 }
 
 class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({required this.clinicType});
-  final ClinicType clinicType;
+  const _EmptyCard({required this.icon});
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +231,7 @@ class _EmptyCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(clinicType.icon, size: 48, color: cs.outline),
+          Icon(icon, size: 48, color: cs.outline),
           const SizedBox(height: 12),
           Text('No upcoming appointments',
               style: Theme.of(context).textTheme.titleMedium),

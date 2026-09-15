@@ -15,7 +15,6 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final clinicType = ref.watch(clinicTypeProvider);
     final todayAsync = ref.watch(todayAppointmentsProvider);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -50,7 +49,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                 Text(DateFormat('EEEE, MMMM d').format(DateTime.now()),
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(color: cs.onSurfaceVariant)),
-                Text(clinicType.clinicName,
+                ClinicTitle(
                     style: theme.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
               ],

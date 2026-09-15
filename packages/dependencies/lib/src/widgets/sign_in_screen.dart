@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/clinic_type.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/supabase_providers.dart';
 import '../theme/brand.dart';
@@ -9,18 +8,20 @@ import 'async_view.dart';
 
 /// Shared sign-in for all four apps.
 ///
-/// Sign-up is offered only where it makes sense — a patient can create their
-/// own account, but staff accounts are provisioned by an admin, because the
-/// database refuses to let anyone choose their own role at signup.
+/// Every app offers sign-up, because an account grants nothing by itself.
+/// Access comes afterwards, per clinic: a patient joins with the clinic's code,
+/// and a staff member is added by that clinic's admin — who can only add an
+/// account that already exists.
+///
+/// There is no clinic branding here: nobody is known yet, so there is no
+/// clinic to brand the screen with.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({
     super.key,
     required this.appName,
-    this.allowSignUp = false,
   });
 
   final String appName;
-  final bool allowSignUp;
 
   @override
   ConsumerState<SignInScreen> createState() => _SignInScreenState();
@@ -67,9 +68,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           _fullName.text.trim(),
         );
         if (mounted) {
+          final isStaffApp = ref.read(appRoleProvider).isStaff;
           setState(() => _notice =
               'Account created. If email confirmation is on, check your inbox '
-              'before signing in.');
+              'before signing in.'
+              '${isStaffApp ? ' Then ask your clinic administrator to add '
+                  '${_email.text.trim()}.' : ''}');
         }
       } else {
         await repo.signIn(_email.text.trim(), _password.text);
@@ -83,7 +87,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final clinicType = ref.watch(clinicTypeProvider);
+    final isStaffApp = ref.watch(appRoleProvider).isStaff;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
@@ -99,7 +103,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _Header(clinicType: clinicType, appName: widget.appName),
+                    _Header(appName: widget.appName),
                     const SizedBox(height: 32),
                     if (_isSignUp) ...[
                       TextFormField(
@@ -163,25 +167,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                             )
                           : Text(_isSignUp ? 'Create account' : 'Sign in'),
                     ),
-                    if (widget.allowSignUp) ...[
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() {
+                                _isSignUp = !_isSignUp;
+                                _error = null;
+                                _notice = null;
+                              }),
+                      child: Text(_isSignUp
+                          ? 'I already have an account'
+                          : 'New here? Create an account'),
+                    ),
+                    if (isStaffApp) ...[
                       const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => setState(() {
-                                  _isSignUp = !_isSignUp;
-                                  _error = null;
-                                  _notice = null;
-                                }),
-                        child: Text(_isSignUp
-                            ? 'I already have an account'
-                            : 'New here? Create an account'),
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 16),
                       Text(
-                        'Staff accounts are created by your clinic '
-                        'administrator.',
+                        'New staff: create your account, then ask your '
+                        'clinic administrator to add you.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,
@@ -201,9 +204,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.clinicType, required this.appName});
+  const _Header({required this.appName});
 
-  final ClinicType clinicType;
   final String appName;
 
   @override
@@ -213,34 +215,14 @@ class _Header extends StatelessWidget {
 
     return Column(
       children: [
-        if (clinicType.isDTouchBranded)
-          // The lockup already carries the clinic name, so repeating it as
-          // text underneath would just say the same thing twice.
-          const BrandWordmark(height: 88)
-        else ...[
-          // Other flavors are not D-Touch, so they get the shared palette but
-          // their own name rather than a dental practice's wordmark.
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [cs.primary, cs.secondary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(clinicType.icon, size: 36, color: cs.onPrimary),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            clinicType.clinicName,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-        ],
+        const ClinicMark(size: 72),
+        const SizedBox(height: 16),
+        Text(
+          'Sign in to your clinic',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 8),
         Text(
           appName,

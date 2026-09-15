@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:api_sdk/api_sdk.dart';
 import '../features/home/home_screen.dart';
 import '../features/appointments/my_appointments_screen.dart';
 import '../features/appointments/book_appointment_screen.dart';
@@ -9,6 +10,10 @@ import '../features/profile/profile_screen.dart';
 final patientRouter = GoRouter(
   initialLocation: '/',
   routes: [
+    GoRoute(
+      path: '/join',
+      builder: (_, __) => const JoinClinicScreen(),
+    ),
     GoRoute(
       path: '/appointments/book',
       builder: (_, __) => const BookAppointmentScreen(),

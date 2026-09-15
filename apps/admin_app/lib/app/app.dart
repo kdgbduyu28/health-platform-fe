@@ -10,7 +10,6 @@ class AdminApp extends StatelessWidget {
     return ClinicAppShell(
       appName: 'Admin',
       routerConfig: adminRouter,
-      allowSignUp: false,
     );
   }
 }
