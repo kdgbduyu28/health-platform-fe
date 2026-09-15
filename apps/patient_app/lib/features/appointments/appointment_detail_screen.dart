@@ -115,16 +115,24 @@ class AppointmentDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
-          // Notes
-          if (appointment.notes != null) ...[
+          // What the doctor left for the patient. The clinic's clinical notes
+          // are not readable from a patient account at all.
+          if (appointment.patientNote != null) ...[
             _InfoCard(
               children: [
-                Text('Notes',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant)),
+                Row(
+                  children: [
+                    Icon(Icons.chat_bubble_outline,
+                        size: 16, color: cs.primary),
+                    const SizedBox(width: 6),
+                    Text('Note from your doctor',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurfaceVariant)),
+                  ],
+                ),
                 const SizedBox(height: 6),
-                Text(appointment.notes!),
+                Text(appointment.patientNote!),
               ],
             ),
             const SizedBox(height: 12),

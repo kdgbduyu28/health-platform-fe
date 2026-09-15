@@ -99,7 +99,6 @@ void main() {
         'id': 'chart-1',
         'person_id': 'person-1',
         'clinic_id': 'clinic-1',
-        'medical_notes': 'Allergic to latex.',
         'person': {
           'full_name': 'Maria Reyes',
           'phone': '0928',
@@ -112,7 +111,6 @@ void main() {
       expect(p.name, 'Maria Reyes');
       expect(p.email, '');
       expect(p.initials, 'MR');
-      expect(p.medicalNotes, 'Allergic to latex.');
       expect(p.dateOfBirth, DateTime(1985, 7, 22));
     });
 
@@ -121,6 +119,23 @@ void main() {
           {'id': 'c', 'person_id': 'p', 'clinic_id': 'k'});
       expect(p.name, '');
       expect(p.initials, '?');
+    });
+
+    test('search matches a name, or a phone however it is typed', () {
+      final p = Patient.fromJson({
+        'id': 'c',
+        'person_id': 'p',
+        'clinic_id': 'k',
+        'person': {'full_name': 'Maria Reyes', 'phone': '0928-123-4567'},
+      });
+      expect(p.matches(''), isTrue);
+      expect(p.matches('reyes'), isTrue);
+      expect(p.matches('928 123'), isTrue);
+      expect(p.matches('juan'), isFalse);
+      // The front desk's duplicate check: same number, different formatting.
+      expect(p.hasPhone('+63 928 123 4567'), isTrue);
+      expect(p.hasPhone('09281234560'), isFalse);
+      expect(p.hasPhone(''), isFalse);
     });
   });
 
@@ -147,6 +162,55 @@ void main() {
     expect(a.patient.name, 'Juan dela Cruz');
     expect(a.doctor.clinicId, 'clinic-1');
     expect(a.status, AppointmentStatus.pending);
+  });
+
+  group('Appointment notes', () {
+    Map<String, dynamic> row(Map<String, dynamic> extra) => {
+          'id': 'appt-1',
+          'clinic_id': 'clinic-1',
+          'scheduled_at': '2026-09-14T01:00:00Z',
+          'service_name': 'Teeth Cleaning',
+          'status': 'completed',
+          'patient': {
+            'id': 'chart-1',
+            'person_id': 'person-1',
+            'clinic_id': 'clinic-1',
+          },
+          'doctor': {
+            'id': 'doc-1',
+            'clinic_id': 'clinic-1',
+            'full_name': 'Maria Santos',
+          },
+          ...extra,
+        };
+
+    test('reads the note to the patient; a blank one is none', () {
+      expect(Appointment.fromJson(row({'patient_note': 'Floss daily.'})).patientNote,
+          'Floss daily.');
+      expect(Appointment.fromJson(row({'patient_note': '  '})).patientNote,
+          isNull);
+    });
+
+    test('reads an embedded visit note as an object or a one-element list', () {
+      const note = {'body': 'No cavities.', 'updated_at': '2026-09-01T02:00:00Z'};
+      expect(Appointment.fromJson(row({'visit_note': note})).visitNote?.body,
+          'No cavities.');
+      expect(Appointment.fromJson(row({'visit_note': [note]})).visitNote?.body,
+          'No cavities.');
+      expect(Appointment.fromJson(row({'visit_note': <dynamic>[]})).visitNote,
+          isNull);
+      expect(
+          Appointment.fromJson(row({'visit_note': {'body': ''}})).visitNote,
+          isNull);
+      expect(Appointment.fromJson(row({})).visitNote, isNull);
+    });
+  });
+
+  test('AppRole.seesClinicalNotes: doctors and admins only', () {
+    expect(AppRole.doctor.seesClinicalNotes, isTrue);
+    expect(AppRole.admin.seesClinicalNotes, isTrue);
+    expect(AppRole.assistant.seesClinicalNotes, isFalse);
+    expect(AppRole.patient.seesClinicalNotes, isFalse);
   });
 
   test('AppRole.isGrantedBy: which membership opens which app', () {
@@ -261,6 +325,64 @@ void main() {
       final container = appContainer(app: AppRole.patient, visible: [a]);
       await container.read(myClinicsProvider.future);
       expect(container.read(currentClinicProvider).value, isNull);
+    });
+  });
+
+  group('canSeeClinicalNotesProvider follows the role at the current clinic', () {
+    final a = clinic('a'), b = clinic('b');
+
+    Future<bool> canSee(ProviderContainer c, {String? select}) async {
+      await c.read(myClinicsProvider.future);
+      if (select != null) c.read(selectedClinicIdProvider.notifier).select(select);
+      return c.read(canSeeClinicalNotesProvider.future);
+    }
+
+    test('a doctor at the clinic can', () async {
+      final c = appContainer(
+        app: AppRole.doctor,
+        visible: [a],
+        memberships: [staffAt('a', AppRole.doctor)],
+      );
+      expect(await canSee(c), isTrue);
+    });
+
+    test('the front desk cannot', () async {
+      final c = appContainer(
+        app: AppRole.assistant,
+        visible: [a],
+        memberships: [staffAt('a', AppRole.assistant)],
+      );
+      expect(await canSee(c), isFalse);
+    });
+
+    test('an admin running the front desk can', () async {
+      final c = appContainer(
+        app: AppRole.assistant,
+        visible: [a],
+        memberships: [staffAt('a', AppRole.admin)],
+      );
+      expect(await canSee(c), isTrue);
+    });
+
+    test('a clinician role at another clinic does not carry over', () async {
+      final c = appContainer(
+        app: AppRole.assistant,
+        visible: [a, b],
+        memberships: [staffAt('a', AppRole.assistant), staffAt('b', AppRole.admin)],
+      );
+      expect(await canSee(c), isFalse);
+      expect(await canSee(c, select: 'b'), isTrue);
+    });
+
+    test('never in the patient app, even for an account that is also staff',
+        () async {
+      final c = appContainer(
+        app: AppRole.patient,
+        visible: [a],
+        charts: [chartAt('a')],
+        memberships: [staffAt('a', AppRole.doctor)],
+      );
+      expect(await canSee(c), isFalse);
     });
   });
 }

@@ -4,30 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
 
-class AdminAppointmentDetailScreen extends ConsumerStatefulWidget {
+class AdminAppointmentDetailScreen extends ConsumerWidget {
   const AdminAppointmentDetailScreen({super.key, required this.appointmentId});
   final String appointmentId;
 
   @override
-  ConsumerState<AdminAppointmentDetailScreen> createState() =>
-      _AdminAppointmentDetailScreenState();
-}
-
-class _AdminAppointmentDetailScreenState
-    extends ConsumerState<AdminAppointmentDetailScreen> {
-  final _notesCtrl = TextEditingController();
-  bool _editingNotes = false;
-
-  @override
-  void dispose() {
-    _notesCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final appointmentAsync =
-        ref.watch(appointmentByIdProvider(widget.appointmentId));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appointmentAsync = ref.watch(appointmentByIdProvider(appointmentId));
 
     final guard = asyncGuard(
       appointmentAsync,
@@ -47,6 +30,8 @@ class _AdminAppointmentDetailScreenState
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final notifier = ref.read(appointmentsProvider.notifier);
+    void openHistory() =>
+        context.push('/patients/${appointment.patient.id}');
 
     return Scaffold(
       appBar: AppBar(
@@ -88,6 +73,11 @@ class _AdminAppointmentDetailScreenState
           // Patient info
           _Section(
             title: 'Patient',
+            action: TextButton.icon(
+              onPressed: openHistory,
+              icon: const Icon(Icons.history, size: 16),
+              label: const Text('History'),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -135,53 +125,17 @@ class _AdminAppointmentDetailScreenState
           ),
           const SizedBox(height: 12),
 
-          // Notes
-          _Section(
-            title: 'Notes',
-            action: TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  _editingNotes = !_editingNotes;
-                  if (_editingNotes) {
-                    _notesCtrl.text = appointment.notes ?? '';
-                  }
-                });
-              },
-              icon: Icon(_editingNotes ? Icons.close : Icons.edit_outlined,
-                  size: 16),
-              label: Text(_editingNotes ? 'Cancel' : 'Edit'),
-            ),
-            child: _editingNotes
-                ? Column(
-                    children: [
-                      TextField(
-                        controller: _notesCtrl,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                            hintText: 'Add consultation notes…'),
-                      ),
-                      const SizedBox(height: 8),
-                      FilledButton(
-                        onPressed: () {
-                          notifier.updateNotes(
-                              appointment.id, _notesCtrl.text.trim());
-                          setState(() => _editingNotes = false);
-                        },
-                        child: const Text('Save Notes'),
-                      ),
-                    ],
-                  )
-                : Text(
-                    appointment.notes?.isNotEmpty == true
-                        ? appointment.notes!
-                        : 'No notes yet.',
-                    style: TextStyle(
-                        color: appointment.notes?.isNotEmpty == true
-                            ? cs.onSurface
-                            : cs.outline),
-                  ),
+          // Clinical notes and history — admins are clinicians for this
+          // purpose (the clinic owner is often a doctor).
+          ChartNoteSection(patient: appointment.patient),
+          PreviousVisitsSection(
+            appointment: appointment,
+            onOpenHistory: openHistory,
+            onOpenAppointment: (a) => context.push('/appointments/${a.id}'),
           ),
-          const SizedBox(height: 24),
+          VisitNoteSection(appointment: appointment),
+          PatientNoteSection(appointment: appointment),
+          const SizedBox(height: 12),
 
           // Action buttons
           if (appointment.status == AppointmentStatus.pending) ...[

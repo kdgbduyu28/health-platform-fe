@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:api_sdk/api_sdk.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/schedule/schedule_screen.dart';
 import '../features/appointments/appointment_detail_screen.dart';
-import '../features/patients/patients_screen.dart';
 import '../features/clinic/clinic_settings_screen.dart';
 
 final adminRouter = GoRouter(
@@ -13,6 +13,13 @@ final adminRouter = GoRouter(
       path: '/appointments/:id',
       builder: (context, state) =>
           AdminAppointmentDetailScreen(appointmentId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/patients/:id',
+      builder: (context, state) => PatientHistoryScreen(
+        patientId: state.pathParameters['id']!,
+        onOpenAppointment: (a) => context.push('/appointments/${a.id}'),
+      ),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => _NavScaffold(shell: shell),
@@ -24,7 +31,12 @@ final adminRouter = GoRouter(
           GoRoute(path: '/schedule', builder: (_, __) => const ScheduleScreen()),
         ]),
         StatefulShellBranch(routes: [
-          GoRoute(path: '/patients', builder: (_, __) => const PatientsScreen()),
+          GoRoute(
+            path: '/patients',
+            builder: (context, _) => PatientDirectoryScreen(
+              onOpenPatient: (p) => context.push('/patients/${p.id}'),
+            ),
+          ),
         ]),
         StatefulShellBranch(routes: [
           GoRoute(path: '/clinic', builder: (_, __) => const ClinicSettingsScreen()),

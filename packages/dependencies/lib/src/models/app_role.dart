@@ -16,6 +16,10 @@ enum AppRole {
 
   bool get isStaff => this != AppRole.patient;
 
+  /// Whether a membership with this role may read and write clinical notes.
+  /// Mirrors `private.is_clinician` in the database.
+  bool get seesClinicalNotes => this == AppRole.doctor || this == AppRole.admin;
+
   String get displayName => switch (this) {
         AppRole.patient => 'Patient',
         AppRole.doctor => 'Doctor',

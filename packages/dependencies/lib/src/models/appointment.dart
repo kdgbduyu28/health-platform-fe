@@ -1,6 +1,7 @@
 import 'appointment_status.dart';
-import 'patient.dart';
+import 'clinical_note.dart';
 import 'doctor.dart';
+import 'patient.dart';
 
 class Appointment {
   const Appointment({
@@ -11,7 +12,8 @@ class Appointment {
     required this.dateTime,
     required this.service,
     required this.status,
-    this.notes,
+    this.patientNote,
+    this.visitNote,
     this.serviceId,
   });
 
@@ -25,13 +27,23 @@ class Appointment {
   final DateTime dateTime;
   final String service;
   final AppointmentStatus status;
-  final String? notes;
+
+  /// What the doctor wants the patient to read. Visible to anyone who can see
+  /// the appointment; only the clinic's doctors and admins can write it.
+  final String? patientNote;
+
+  /// The consultation note — present only when the appointment was fetched
+  /// with it embedded (a clinician's view of a patient's history). Null
+  /// otherwise, which does not mean no note was written.
+  final ClinicalNote? visitNote;
   final String? serviceId;
 
   /// Expects the chart (with its person) and the doctor embedded:
   ///
   ///   appointments?select=*,patient:patients(*,person:persons(*)),
   ///                        doctor:doctors(*)
+  ///
+  /// optionally with `visit_note:visit_notes(*)` as well.
   ///
   /// `scheduled_at` comes back as a timestamptz in UTC; it is converted to the
   /// device's local zone so the UI formats it as the clinic's wall clock.
@@ -44,12 +56,13 @@ class Appointment {
       dateTime: DateTime.parse(json['scheduled_at'] as String).toLocal(),
       service: json['service_name'] as String,
       status: AppointmentStatus.fromWire(json['status'] as String),
-      notes: json['notes'] as String?,
+      patientNote: _blankToNull(json['patient_note'] as String?),
+      visitNote: ClinicalNote.fromNullableJson(json['visit_note']),
       serviceId: json['service_id'] as String?,
     );
   }
 
-  Appointment copyWith({AppointmentStatus? status, String? notes}) {
+  Appointment copyWith({AppointmentStatus? status, String? patientNote}) {
     return Appointment(
       id: id,
       clinicId: clinicId,
@@ -58,7 +71,8 @@ class Appointment {
       dateTime: dateTime,
       service: service,
       status: status ?? this.status,
-      notes: notes ?? this.notes,
+      patientNote: patientNote ?? this.patientNote,
+      visitNote: visitNote,
       serviceId: serviceId,
     );
   }
@@ -72,3 +86,5 @@ class Appointment {
         dateTime.day == now.day;
   }
 }
+
+String? _blankToNull(String? s) => s == null || s.trim().isEmpty ? null : s;

@@ -4,31 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
 
-class DoctorAppointmentDetailScreen extends ConsumerStatefulWidget {
-  const DoctorAppointmentDetailScreen(
-      {super.key, required this.appointmentId});
+class DoctorAppointmentDetailScreen extends ConsumerWidget {
+  const DoctorAppointmentDetailScreen({super.key, required this.appointmentId});
   final String appointmentId;
 
   @override
-  ConsumerState<DoctorAppointmentDetailScreen> createState() =>
-      _DoctorAppointmentDetailScreenState();
-}
-
-class _DoctorAppointmentDetailScreenState
-    extends ConsumerState<DoctorAppointmentDetailScreen> {
-  final _notesCtrl = TextEditingController();
-  bool _editingNotes = false;
-
-  @override
-  void dispose() {
-    _notesCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final appointmentAsync =
-        ref.watch(appointmentByIdProvider(widget.appointmentId));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appointmentAsync = ref.watch(appointmentByIdProvider(appointmentId));
 
     final guard = asyncGuard(
       appointmentAsync,
@@ -48,6 +30,8 @@ class _DoctorAppointmentDetailScreenState
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final notifier = ref.read(appointmentsProvider.notifier);
+    final patient = appointment.patient;
+    void openHistory() => context.push('/patients/${patient.id}');
 
     return Scaffold(
       appBar: AppBar(
@@ -93,19 +77,28 @@ class _DoctorAppointmentDetailScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Patient',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant,
-                        fontSize: 12)),
-                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Text('Patient',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurfaceVariant,
+                            fontSize: 12)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: openHistory,
+                      icon: const Icon(Icons.history, size: 16),
+                      label: const Text('History'),
+                    ),
+                  ],
+                ),
                 Row(
                   children: [
                     CircleAvatar(
                       radius: 28,
                       backgroundColor: cs.secondaryContainer,
                       child: Text(
-                        appointment.patient.initials,
+                        patient.initials,
                         style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -113,99 +106,39 @@ class _DoctorAppointmentDetailScreenState
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(appointment.patient.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 16)),
-                        Text(appointment.patient.phone,
-                            style:
-                                TextStyle(color: cs.onSurfaceVariant)),
-                        if (appointment.patient.age != null)
-                          Text('Age ${appointment.patient.age}',
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(patient.name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 16)),
+                          Text(patient.phone,
                               style: TextStyle(color: cs.onSurfaceVariant)),
-                      ],
+                          if (patient.age != null)
+                            Text('Age ${patient.age}',
+                                style: TextStyle(color: cs.onSurfaceVariant)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                if (appointment.patient.medicalNotes != null) ...[
-                  const Divider(height: 20),
-                  Text('Medical Notes',
-                      style: TextStyle(
-                          fontSize: 12, color: cs.onSurfaceVariant)),
-                  const SizedBox(height: 4),
-                  Text(appointment.patient.medicalNotes!),
-                ],
               ],
             ),
           ),
           const SizedBox(height: 12),
 
-          // Consultation notes
-          _Card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text('Consultation Notes',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurfaceVariant,
-                            fontSize: 12)),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: () => setState(() {
-                        _editingNotes = !_editingNotes;
-                        if (_editingNotes) {
-                          _notesCtrl.text = appointment.notes ?? '';
-                        }
-                      }),
-                      icon: Icon(
-                          _editingNotes ? Icons.close : Icons.edit_outlined,
-                          size: 16),
-                      label: Text(_editingNotes ? 'Cancel' : 'Edit'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (_editingNotes) ...[
-                  TextField(
-                    controller: _notesCtrl,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                        hintText: 'Write your consultation notes…'),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton(
-                    onPressed: () {
-                      notifier.updateNotes(
-                          appointment.id, _notesCtrl.text.trim());
-                      setState(() => _editingNotes = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Notes saved'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
-                    child: const Text('Save Notes'),
-                  ),
-                ] else
-                  Text(
-                    appointment.notes?.isNotEmpty == true
-                        ? appointment.notes!
-                        : 'No notes yet. Tap Edit to add.',
-                    style: TextStyle(
-                        color: appointment.notes?.isNotEmpty == true
-                            ? cs.onSurface
-                            : cs.outline),
-                  ),
-              ],
-            ),
+          // What the consult needs, in the order it is needed: what is on
+          // file, what happened last time, then today's notes.
+          ChartNoteSection(patient: patient),
+          PreviousVisitsSection(
+            appointment: appointment,
+            onOpenHistory: openHistory,
+            onOpenAppointment: (a) => context.push('/appointments/${a.id}'),
           ),
-          const SizedBox(height: 24),
+          VisitNoteSection(appointment: appointment),
+          PatientNoteSection(appointment: appointment),
+          const SizedBox(height: 12),
 
           // Actions
           if (appointment.status == AppointmentStatus.confirmed)

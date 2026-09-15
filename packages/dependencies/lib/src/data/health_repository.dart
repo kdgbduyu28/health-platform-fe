@@ -4,6 +4,7 @@ import '../models/app_role.dart';
 import '../models/appointment.dart';
 import '../models/appointment_status.dart';
 import '../models/clinic.dart';
+import '../models/clinical_note.dart';
 import '../models/doctor.dart';
 import '../models/membership.dart';
 import '../models/patient.dart';
@@ -32,6 +33,9 @@ class HealthRepository {
   /// single-column FKs whenever they add a composite one.
   static const _appointmentSelect =
       '*, patient:patients(*, person:persons(*)), doctor:doctors(*)';
+
+  static const _historySelect =
+      '$_appointmentSelect, visit_note:visit_notes(*)';
 
   String? get _uid => _db.auth.currentUser?.id;
 
@@ -132,6 +136,53 @@ class HealthRepository {
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
 
+  /// One chart, with its person. Null if it does not exist or RLS hides it.
+  Future<Patient?> fetchPatient(String patientId) async {
+    final row = await _db
+        .from('patients')
+        .select(_patientSelect)
+        .eq('id', patientId)
+        .maybeSingle();
+    return row == null ? null : Patient.fromJson(row);
+  }
+
+  /// Every appointment on one chart, newest first.
+  ///
+  /// With [withVisitNotes] each one carries its consultation note. Ask for
+  /// that only as a clinician: RLS returns no notes to anyone else, so the
+  /// embed would come back empty and look like "no notes written".
+  Future<List<Appointment>> fetchPatientHistory(
+    String patientId, {
+    bool withVisitNotes = false,
+  }) async {
+    final rows = await _db
+        .from('appointments')
+        .select(withVisitNotes ? _historySelect : _appointmentSelect)
+        .eq('patient_id', patientId)
+        .order('scheduled_at', ascending: false);
+    return rows.map((r) => Appointment.fromJson(r)).toList();
+  }
+
+  /// The standing medical note on a chart. Clinicians only.
+  Future<ClinicalNote?> fetchChartNote(String patientId) async {
+    final row = await _db
+        .from('chart_notes')
+        .select()
+        .eq('patient_id', patientId)
+        .maybeSingle();
+    return ClinicalNote.fromNullableJson(row);
+  }
+
+  /// The consultation note on one appointment. Clinicians only.
+  Future<ClinicalNote?> fetchVisitNote(String appointmentId) async {
+    final row = await _db
+        .from('visit_notes')
+        .select()
+        .eq('appointment_id', appointmentId)
+        .maybeSingle();
+    return ClinicalNote.fromNullableJson(row);
+  }
+
   /// Everyone on staff at [clinicId], with their name and email. Readable by
   /// the clinic's admins.
   Future<List<ClinicMembership>> fetchStaff(String clinicId) async {
@@ -174,8 +225,38 @@ class HealthRepository {
           .from('appointments')
           .update({'status': status.wire}).eq('id', appointmentId);
 
-  Future<void> updateNotes(String appointmentId, String notes) =>
-      _db.from('appointments').update({'notes': notes}).eq('id', appointmentId);
+  /// Sets the note the patient reads on this appointment; blank clears it.
+  /// The database lets only the clinic's doctors and admins change it.
+  Future<void> updatePatientNote(String appointmentId, String? note) {
+    final text = note?.trim() ?? '';
+    return _db
+        .from('appointments')
+        .update({'patient_note': text.isEmpty ? null : text}).eq(
+            'id', appointmentId);
+  }
+
+  /// Writes the standing medical note on a chart. An empty [body] clears it;
+  /// the row stays, so who cleared it is still on record. Clinicians only.
+  Future<void> saveChartNote({
+    required String patientId,
+    required String clinicId,
+    required String body,
+  }) =>
+      _db.from('chart_notes').upsert(
+        {'patient_id': patientId, 'clinic_id': clinicId, 'body': body},
+        onConflict: 'patient_id',
+      );
+
+  /// Writes the consultation note on an appointment. Clinicians only.
+  Future<void> saveVisitNote({
+    required String appointmentId,
+    required String clinicId,
+    required String body,
+  }) =>
+      _db.from('visit_notes').upsert(
+        {'appointment_id': appointmentId, 'clinic_id': clinicId, 'body': body},
+        onConflict: 'appointment_id',
+      );
 
   /// Registers a walk-in and books their appointment in one transaction,
   /// returning the new appointment id.

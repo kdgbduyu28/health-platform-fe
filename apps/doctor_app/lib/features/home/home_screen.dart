@@ -13,7 +13,7 @@ class DoctorHomeScreen extends ConsumerStatefulWidget {
 
 class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 2, vsync: this);
+  late final TabController _tabs = TabController(length: 3, vsync: this);
 
   @override
   void dispose() {
@@ -38,6 +38,12 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
             a.dateTime.isAfter(DateTime.now()) &&
             !a.isToday &&
             a.status != AppointmentStatus.cancelled)
+        .toList();
+    // Newest first: the visit a doctor looks back at is usually the last one.
+    final past = (allAsync.value ?? const <Appointment>[])
+        .where((a) => a.dateTime.isBefore(DateTime.now()) && !a.isToday)
+        .toList()
+        .reversed
         .toList();
 
     final theme = Theme.of(context);
@@ -93,6 +99,7 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
               tabs: [
                 Tab(text: "Today (${todayAppts.length})"),
                 Tab(text: "Upcoming (${upcoming.length})"),
+                const Tab(text: 'Past'),
               ],
             ),
           ),
@@ -161,6 +168,15 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                     builder: (_) => _AppointmentListTab(
                       appointments: upcoming,
                       emptyMessage: 'No upcoming appointments',
+                      showTime: false,
+                    ),
+                  ),
+                  AsyncView(
+                    value: allAsync,
+                    onRetry: () => ref.invalidate(appointmentsProvider),
+                    builder: (_) => _AppointmentListTab(
+                      appointments: past,
+                      emptyMessage: 'No past appointments',
                       showTime: false,
                     ),
                   ),

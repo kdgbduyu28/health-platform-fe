@@ -80,8 +80,10 @@ class AppointmentsNotifier extends AsyncNotifier<List<Appointment>> {
     await refresh();
   }
 
-  Future<void> updateNotes(String id, String notes) async {
-    await ref.read(healthRepositoryProvider).updateNotes(id, notes);
+  /// The note the patient reads. Blank clears it. The database refuses this
+  /// from anyone but the clinic's doctors and admins.
+  Future<void> updatePatientNote(String id, String? note) async {
+    await ref.read(healthRepositoryProvider).updatePatientNote(id, note);
     await refresh();
   }
 }
