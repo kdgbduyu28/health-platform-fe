@@ -31,7 +31,8 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
 
   Service? _service;
   Doctor? _doctor;
-  String? _timeSlot;
+  /// One of today's times `available_slots` offered.
+  DateTime? _slot;
   bool _busy = false;
 
   @override
@@ -124,7 +125,10 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
                 return FilterChip(
                   label: Text(s.name),
                   selected: isSelected,
-                  onSelected: (_) => setState(() => _service = s),
+                  onSelected: (_) => setState(() {
+                    _service = s;
+                    _slot = null;
+                  }),
                   selectedColor: cs.primaryContainer,
                   checkmarkColor: cs.onPrimaryContainer,
                 );
@@ -150,7 +154,10 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
                       ),
                     ),
                     child: ListTile(
-                      onTap: () => setState(() => _doctor = d),
+                      onTap: () => setState(() {
+                        _doctor = d;
+                        _slot = null;
+                      }),
                       leading: DoctorAvatar(doctor: d),
                       title: Text('Dr. ${d.name}',
                           style: const TextStyle(
@@ -164,24 +171,41 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
                 )),
             const SizedBox(height: 24),
 
-            // Time slot (today's available slots)
-            Text('Time Slot',
+            // Today's free times for this doctor and service.
+            Text('Time',
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: (_doctor?.availableTimeSlots ?? []).map((s) {
-                final isSelected = s == _timeSlot;
-                return ChoiceChip(
-                  label: Text(s),
-                  selected: isSelected,
-                  onSelected: (_) => setState(() => _timeSlot = s),
-                  selectedColor: cs.primaryContainer,
-                );
-              }).toList(),
-            ),
+            if (_doctor case final doctor?)
+              AsyncView(
+                value: ref.watch(availableSlotsProvider((
+                  doctorId: doctor.id,
+                  day: DateTime.now(),
+                  serviceId: _service?.id,
+                ))),
+                onRetry: () => ref.invalidate(availableSlotsProvider),
+                builder: (slots) => slots.isEmpty
+                    ? Text(
+                        'Dr. ${doctor.name} has no free time left today.',
+                        style: TextStyle(color: cs.onSurfaceVariant),
+                      )
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final slot in slots)
+                            ChoiceChip(
+                              label: Text(DateFormat.jm().format(slot)),
+                              selected: slot == _slot,
+                              onSelected: (_) => setState(() => _slot = slot),
+                              selectedColor: cs.primaryContainer,
+                            ),
+                        ],
+                      ),
+              )
+            else
+              Text('Choose a doctor to see their free times.',
+                  style: TextStyle(color: cs.onSurfaceVariant)),
             const SizedBox(height: 32),
 
             // Book button
@@ -345,7 +369,7 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
   bool _canSubmit(Patient? selected) =>
       _service != null &&
       _doctor != null &&
-      _timeSlot != null &&
+      _slot != null &&
       (_mode == _PatientMode.newPatient || selected != null);
 
   Future<void> _submit(BuildContext context) async {
@@ -353,7 +377,7 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
     if (isNew && !_formKey.currentState!.validate()) return;
     final service = _service;
     final doctor = _doctor;
-    final slot = _timeSlot;
+    final slot = _slot;
     final patient = isNew
         ? null
         : _find(ref.read(patientsProvider).value ?? const [], _patientId);
@@ -370,10 +394,7 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
       return;
     }
 
-    final parts = slot.split(':');
-    final now = DateTime.now();
-    final scheduledAt = DateTime(
-        now.year, now.month, now.day, int.parse(parts[0]), int.parse(parts[1]));
+    final scheduledAt = slot;
     final notifier = ref.read(appointmentsProvider.notifier);
     final name = patient?.name ?? _nameCtrl.text.trim();
 
@@ -428,6 +449,9 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
         ),
       );
     } catch (e) {
+      // Most likely the time was taken meanwhile: refetch, and pick again.
+      ref.invalidate(availableSlotsProvider);
+      if (mounted) setState(() => _slot = null);
       messenger.showSnackBar(SnackBar(
         content: Text(describeError(e)),
         behavior: SnackBarBehavior.floating,
@@ -445,7 +469,7 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
       _query = '';
       _service = null;
       _doctor = null;
-      _timeSlot = null;
+      _slot = null;
     });
     _searchCtrl.clear();
     _nameCtrl.clear();

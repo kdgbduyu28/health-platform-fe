@@ -29,7 +29,6 @@ class DoctorAppointmentDetailScreen extends ConsumerWidget {
 
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final notifier = ref.read(appointmentsProvider.notifier);
     final patient = appointment.patient;
     void openHistory() => context.pushInClinic('/patients/${patient.id}');
 
@@ -140,37 +139,34 @@ class DoctorAppointmentDetailScreen extends ConsumerWidget {
           PatientNoteSection(appointment: appointment),
           const SizedBox(height: 12),
 
-          // Actions
-          if (appointment.status == AppointmentStatus.confirmed)
-            FilledButton.icon(
-              onPressed: () {
-                notifier.updateStatus(
-                    appointment.id, AppointmentStatus.completed);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Appointment marked as completed'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-                context.pop();
-              },
-              icon: const Icon(Icons.task_alt),
-              label: const Text('Mark as Completed'),
-            ),
+          // Actions: the next step of the visit, once it has been saved.
           if (appointment.status == AppointmentStatus.pending)
             FilledButton.icon(
-              onPressed: () {
-                notifier.updateStatus(
-                    appointment.id, AppointmentStatus.confirmed);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Appointment confirmed'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
+              onPressed: () => changeAppointmentStatus(
+                  context, ref, appointment, AppointmentStatus.confirmed,
+                  done: 'Appointment confirmed'),
               icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Confirm Appointment'),
+              label: const Text('Confirm appointment'),
+            ),
+          if (appointment.status == AppointmentStatus.confirmed ||
+              appointment.status == AppointmentStatus.arrived)
+            FilledButton.icon(
+              onPressed: () => changeAppointmentStatus(
+                  context, ref, appointment, AppointmentStatus.inConsultation,
+                  done: 'Consultation started'),
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Start consultation'),
+            ),
+          if (appointment.status == AppointmentStatus.inConsultation)
+            FilledButton.icon(
+              onPressed: () async {
+                final saved = await changeAppointmentStatus(
+                    context, ref, appointment, AppointmentStatus.completed,
+                    done: 'Visit completed');
+                if (saved && context.mounted) context.pop();
+              },
+              icon: const Icon(Icons.task_alt),
+              label: const Text('Complete visit'),
             ),
         ],
       ),

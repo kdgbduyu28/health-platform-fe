@@ -548,4 +548,131 @@ void main() {
       expect(clinicHome('dtouchdental', AppRole.admin), '/dtouchdental/dashboard');
     });
   });
+
+  group('visit flow', () {
+    test('every status round-trips through its database label', () {
+      for (final s in AppointmentStatus.values) {
+        expect(AppointmentStatus.fromWire(s.wire), s);
+      }
+      expect(AppointmentStatus.inConsultation.wire, 'in_consultation');
+      expect(AppointmentStatus.noShow.wire, 'no_show');
+    });
+
+    test('cancelled visits and no-shows free the doctor; nothing else does',
+        () {
+      expect(
+        [for (final s in AppointmentStatus.values) if (!s.holdsTime) s],
+        [AppointmentStatus.cancelled, AppointmentStatus.noShow],
+      );
+    });
+
+    test('a patient cancels only before arriving; the desk until the consult',
+        () {
+      expect(
+        [for (final s in AppointmentStatus.values) if (s.patientCanCancel) s],
+        [AppointmentStatus.pending, AppointmentStatus.confirmed],
+      );
+      expect(
+        [for (final s in AppointmentStatus.values) if (s.staffCanCancel) s],
+        [
+          AppointmentStatus.pending,
+          AppointmentStatus.confirmed,
+          AppointmentStatus.arrived,
+        ],
+      );
+    });
+
+    test('Appointment.fromJson reads the length and the step times', () {
+      final a = Appointment.fromJson({
+        'id': 'a1',
+        'clinic_id': 'c',
+        'patient': {'id': 'p', 'clinic_id': 'c', 'person_id': 'x'},
+        'doctor': {'id': 'd', 'clinic_id': 'c', 'full_name': 'Ana'},
+        'scheduled_at': '2026-10-05T01:00:00Z',
+        'service_name': 'Root Canal',
+        'status': 'in_consultation',
+        'duration_minutes': 90,
+        'arrived_at': '2026-10-05T00:55:00Z',
+        'started_at': '2026-10-05T01:02:00Z',
+      });
+      expect(a.status, AppointmentStatus.inConsultation);
+      expect(a.endsAt.difference(a.dateTime), const Duration(minutes: 90));
+      expect(a.arrivedAt, isNotNull);
+      expect(a.startedAt!.isUtc, isFalse);
+      expect(a.completedAt, isNull);
+    });
+  });
+
+  group('working hours', () {
+    test('first, last and step become the start times', () {
+      expect(generateTimeSlots((first: 8 * 60, last: 9 * 60 + 30, step: 30)),
+          ['08:00', '08:30', '09:00', '09:30']);
+      expect(generateTimeSlots((first: 600, last: 540, step: 30)), isEmpty);
+    });
+
+    test('an even list is read back as its pattern', () {
+      final hours =
+          workingHoursOf(['09:30', '08:00', '08:30', '09:00', '10:00']);
+      expect(hours, (first: 8 * 60, last: 10 * 60, step: 30));
+      expect(generateTimeSlots(hours!).length, 5);
+    });
+
+    test('a list with a lunch break has no pattern, and says so', () {
+      final slots = ['09:00', '09:30', '10:00', '13:00', '13:30'];
+      expect(workingHoursOf(slots), isNull);
+      expect(describeTimeSlots(slots), '5 set times');
+    });
+
+    test('described the way a clinic would say it', () {
+      expect(describeTimeSlots(['08:00', '08:30', '09:00']),
+          '08:00–09:00, every 30 min');
+      expect(describeTimeSlots(['14:00']), 'At 14:00');
+      expect(describeTimeSlots([]), 'No times set');
+    });
+
+    test('clock strings are checked like the database checks them', () {
+      expect(parseClock('07:05'), 425);
+      expect(parseClock('24:00'), isNull);
+      expect(parseClock('9:00'), isNull);
+      expect(formatClock(425), '07:05');
+    });
+  });
+
+  group('services', () {
+    test('prices print as pesos, grouped, without needless decimals', () {
+      Service priced(double? p) => Service(
+          id: 's', clinicId: 'c', name: 'x', durationMinutes: 30, price: p);
+      expect(priced(1500).priceLabel, '₱1,500');
+      expect(priced(1250.5).priceLabel, '₱1,250.50');
+      expect(priced(350).priceLabel, '₱350');
+      expect(priced(1234567).priceLabel, '₱1,234,567');
+      expect(priced(null).priceLabel, isNull);
+    });
+
+    test('a price arrives from PostgREST as a number or not at all', () {
+      final s = Service.fromJson({
+        'id': 's',
+        'clinic_id': 'c',
+        'name': 'Root Canal',
+        'duration_minutes': 90,
+        'price': 1500,
+        'is_active': false,
+      });
+      expect(s.price, 1500.0);
+      expect(s.isActive, isFalse);
+    });
+
+    test('TimeOff.fromJson: a null doctor is a clinic closure', () {
+      final t = TimeOff.fromJson({
+        'id': 't',
+        'clinic_id': 'c',
+        'doctor_id': null,
+        'starts_on': '2026-12-24',
+        'ends_on': '2026-12-26',
+        'reason': 'Christmas',
+      });
+      expect(t.isClosure, isTrue);
+      expect(t.endsOn.difference(t.startsOn).inDays, 2);
+    });
+  });
 }

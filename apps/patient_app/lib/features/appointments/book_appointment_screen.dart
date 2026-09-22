@@ -18,7 +18,10 @@ class _BookAppointmentScreenState
   Service? _service;
   Doctor? _doctor;
   DateTime? _date;
-  String? _timeSlot;
+
+  /// A start time `available_slots` offered — not built from the date and a
+  /// string, so it is exactly the instant the database will check.
+  DateTime? _slot;
   bool _busy = false;
 
   @override
@@ -66,22 +69,22 @@ class _BookAppointmentScreenState
                   ),
                 2 => _DateTimeStep(
                     doctor: _doctor,
+                    service: _service,
                     selectedDate: _date,
-                    selectedSlot: _timeSlot,
+                    selectedSlot: _slot,
                     onDateSelected: (d) => setState(() {
                       _date = d;
-                      _timeSlot = null;
+                      _slot = null;
                     }),
                     onSlotSelected: (s) => setState(() {
-                      _timeSlot = s;
+                      _slot = s;
                       _step = 3;
                     }),
                   ),
                 _ => _ConfirmStep(
-                    service: _service?.name,
+                    service: _service,
                     doctor: _doctor,
-                    date: _date,
-                    timeSlot: _timeSlot,
+                    slot: _slot,
                     busy: _busy,
                     onConfirm: _confirm,
                   ),
@@ -96,11 +99,8 @@ class _BookAppointmentScreenState
   Future<void> _confirm() async {
     final service = _service;
     final doctor = _doctor;
-    final date = _date;
-    final slot = _timeSlot;
-    if (service == null || doctor == null || date == null || slot == null) {
-      return;
-    }
+    final slot = _slot;
+    if (service == null || doctor == null || slot == null) return;
 
     final messenger = ScaffoldMessenger.of(context);
     final clinicId = ref.read(currentClinicIdProvider);
@@ -128,15 +128,6 @@ class _BookAppointmentScreenState
       return;
     }
 
-    final parts = slot.split(':');
-    final scheduledAt = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      int.parse(parts[0]),
-      int.parse(parts[1]),
-    );
-
     setState(() => _busy = true);
     try {
       await ref.read(appointmentsProvider.notifier).book(
@@ -145,7 +136,7 @@ class _BookAppointmentScreenState
             doctorId: doctor.id,
             serviceId: service.id,
             serviceName: service.name,
-            scheduledAt: scheduledAt,
+            scheduledAt: slot,
           );
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(
@@ -154,6 +145,15 @@ class _BookAppointmentScreenState
       ));
       context.goInClinic('/appointments');
     } catch (e) {
+      // Most likely someone took the time first. Back to the list, which
+      // is refetched without it.
+      ref.invalidate(availableSlotsProvider);
+      if (mounted) {
+        setState(() {
+          _slot = null;
+          _step = 2;
+        });
+      }
       messenger.showSnackBar(SnackBar(
         content: Text(describeError(e)),
         behavior: SnackBarBehavior.floating,
@@ -259,7 +259,11 @@ class _ServiceStep extends StatelessWidget {
           children: services.map((s) {
             final isSelected = s.id == selected?.id;
             return FilterChip(
-              label: Text('${s.name} · ${s.durationMinutes}m'),
+              label: Text([
+                s.name,
+                '${s.durationMinutes} min',
+                if (s.priceLabel != null) s.priceLabel!,
+              ].join(' · ')),
               selected: isSelected,
               onSelected: (_) => onSelect(s),
               selectedColor: cs.primaryContainer,
@@ -351,9 +355,10 @@ class _DoctorTile extends StatelessWidget {
   }
 }
 
-class _DateTimeStep extends StatelessWidget {
+class _DateTimeStep extends ConsumerWidget {
   const _DateTimeStep({
     required this.doctor,
+    required this.service,
     required this.selectedDate,
     required this.selectedSlot,
     required this.onDateSelected,
@@ -361,15 +366,17 @@ class _DateTimeStep extends StatelessWidget {
   });
 
   final Doctor? doctor;
+  final Service? service;
   final DateTime? selectedDate;
-  final String? selectedSlot;
+  final DateTime? selectedSlot;
   final ValueChanged<DateTime> onDateSelected;
-  final ValueChanged<String> onSlotSelected;
+  final ValueChanged<DateTime> onSlotSelected;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final slots = doctor?.availableTimeSlots ?? [];
+    final doctor = this.doctor;
+    final date = selectedDate;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,11 +389,12 @@ class _DateTimeStep extends StatelessWidget {
         const SizedBox(height: 16),
         OutlinedButton.icon(
           onPressed: () async {
+            final today = DateUtils.dateOnly(DateTime.now());
             final picked = await showDatePicker(
               context: context,
-              initialDate: DateTime.now().add(const Duration(days: 1)),
-              firstDate: DateTime.now(),
-              lastDate: DateTime.now().add(const Duration(days: 60)),
+              initialDate: _firstWorkingDay(today, doctor),
+              firstDate: today,
+              lastDate: today.add(const Duration(days: 60)),
               selectableDayPredicate: (day) =>
                   doctor?.availableWeekdays.contains(day.weekday) ?? true,
             );
@@ -399,32 +407,53 @@ class _DateTimeStep extends StatelessWidget {
           ),
           icon: const Icon(Icons.calendar_today),
           label: Text(
-            selectedDate == null
+            date == null
                 ? 'Select date'
-                : DateFormat('EEEE, MMMM d, y').format(selectedDate!),
+                : DateFormat('EEEE, MMMM d, y').format(date),
           ),
         ),
-        if (selectedDate != null) ...[
+        if (date != null && doctor != null) ...[
           const SizedBox(height: 20),
-          Text('Available time slots',
+          Text('Available times',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: slots.map((s) {
-              final isSelected = s == selectedSlot;
-              return ChoiceChip(
-                label: Text(s),
-                selected: isSelected,
-                onSelected: (_) => onSlotSelected(s),
-                selectedColor: cs.primaryContainer,
-              );
-            }).toList(),
+          AsyncView(
+            value: ref.watch(availableSlotsProvider(
+                (doctorId: doctor.id, day: date, serviceId: service?.id))),
+            onRetry: () => ref.invalidate(availableSlotsProvider),
+            builder: (slots) => slots.isEmpty
+                ? Text(
+                    'No times left on this day. Dr. ${doctor.name} may be '
+                    'fully booked or away — try another date.',
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  )
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final slot in slots)
+                        ChoiceChip(
+                          label: Text(DateFormat.jm().format(slot)),
+                          selected: slot == selectedSlot,
+                          onSelected: (_) => onSlotSelected(slot),
+                          selectedColor: cs.primaryContainer,
+                        ),
+                    ],
+                  ),
           ),
         ],
       ],
     );
+  }
+
+  /// The date picker must open on a selectable day, or it throws.
+  static DateTime _firstWorkingDay(DateTime today, Doctor? doctor) {
+    final days = doctor?.availableWeekdays ?? const <int>[];
+    for (var i = 1; i <= 7; i++) {
+      final day = today.add(Duration(days: i));
+      if (days.isEmpty || days.contains(day.weekday)) return day;
+    }
+    return today;
   }
 }
 
@@ -432,16 +461,14 @@ class _ConfirmStep extends StatelessWidget {
   const _ConfirmStep({
     required this.service,
     required this.doctor,
-    required this.date,
-    required this.timeSlot,
+    required this.slot,
     required this.busy,
     required this.onConfirm,
   });
 
-  final String? service;
+  final Service? service;
   final Doctor? doctor;
-  final DateTime? date;
-  final String? timeSlot;
+  final DateTime? slot;
   final bool busy;
   final VoidCallback onConfirm;
 
@@ -466,7 +493,11 @@ class _ConfirmStep extends StatelessWidget {
           ),
           child: Column(
             children: [
-              _SummaryRow(label: 'Service', value: service ?? ''),
+              _SummaryRow(label: 'Service', value: service?.name ?? ''),
+              if (service?.priceLabel case final price?) ...[
+                const Divider(height: 24),
+                _SummaryRow(label: 'Price', value: price),
+              ],
               const Divider(height: 24),
               _SummaryRow(
                   label: 'Doctor', value: 'Dr. ${doctor?.name ?? ''}'),
@@ -476,12 +507,18 @@ class _ConfirmStep extends StatelessWidget {
               const Divider(height: 24),
               _SummaryRow(
                 label: 'Date',
-                value: date != null
-                    ? DateFormat('EEEE, MMMM d, y').format(date!)
+                value: slot != null
+                    ? DateFormat('EEEE, MMMM d, y').format(slot!)
                     : '',
               ),
               const Divider(height: 24),
-              _SummaryRow(label: 'Time', value: timeSlot ?? ''),
+              _SummaryRow(
+                label: 'Time',
+                value: slot != null
+                    ? '${DateFormat.jm().format(slot!)} · '
+                        '${service?.durationMinutes ?? 30} min'
+                    : '',
+              ),
             ],
           ),
         ),

@@ -15,6 +15,10 @@ class Appointment {
     this.patientNote,
     this.visitNote,
     this.serviceId,
+    this.durationMinutes = 30,
+    this.arrivedAt,
+    this.startedAt,
+    this.completedAt,
   });
 
   final String id;
@@ -38,6 +42,17 @@ class Appointment {
   final ClinicalNote? visitNote;
   final String? serviceId;
 
+  /// From the service, set by the database. The visit runs until [endsAt].
+  final int durationMinutes;
+
+  /// When the front desk checked the patient in, the doctor started, and the
+  /// doctor finished. Stamped by the database as the status moves.
+  final DateTime? arrivedAt;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+
+  DateTime get endsAt => dateTime.add(Duration(minutes: durationMinutes));
+
   /// Expects the chart (with its person) and the doctor embedded:
   ///
   ///   appointments?select=*,patient:patients(*,person:persons(*)),
@@ -59,6 +74,10 @@ class Appointment {
       patientNote: _blankToNull(json['patient_note'] as String?),
       visitNote: ClinicalNote.fromNullableJson(json['visit_note']),
       serviceId: json['service_id'] as String?,
+      durationMinutes: json['duration_minutes'] as int? ?? 30,
+      arrivedAt: _time(json['arrived_at']),
+      startedAt: _time(json['started_at']),
+      completedAt: _time(json['completed_at']),
     );
   }
 
@@ -74,6 +93,10 @@ class Appointment {
       patientNote: patientNote ?? this.patientNote,
       visitNote: visitNote,
       serviceId: serviceId,
+      durationMinutes: durationMinutes,
+      arrivedAt: arrivedAt,
+      startedAt: startedAt,
+      completedAt: completedAt,
     );
   }
 
@@ -88,3 +111,6 @@ class Appointment {
 }
 
 String? _blankToNull(String? s) => s == null || s.trim().isEmpty ? null : s;
+
+DateTime? _time(Object? value) =>
+    value == null ? null : DateTime.parse(value as String).toLocal();

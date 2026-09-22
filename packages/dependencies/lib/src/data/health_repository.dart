@@ -12,6 +12,7 @@ import '../models/patient.dart';
 import '../models/profile.dart';
 import '../models/service.dart';
 import '../models/staff_invite.dart';
+import '../models/time_off.dart';
 
 /// Every Supabase call the apps make lives here.
 ///
@@ -134,6 +135,53 @@ class HealthRepository {
         .eq('is_active', true)
         .order('name');
     return rows.map((r) => Service.fromJson(r)).toList();
+  }
+
+  /// The times [doctorId] can still take a [serviceId]-long visit on [day]
+  /// (the clinic's calendar day), from `public.available_slots`: working
+  /// days only, nobody's leave, nothing past, nothing overlapping.
+  Future<List<DateTime>> fetchAvailableSlots({
+    required String doctorId,
+    required DateTime day,
+    String? serviceId,
+  }) async {
+    final rows = await _db.rpc('available_slots', params: {
+      'p_doctor_id': doctorId,
+      'p_date': _date(day),
+      'p_service_id': serviceId,
+    }) as List<dynamic>;
+    return [for (final t in rows) DateTime.parse(t as String).toLocal()];
+  }
+
+  /// The whole roster at [clinicId], inactive doctors included. Admin view.
+  Future<List<Doctor>> fetchRoster(String clinicId) async {
+    final rows = await _db
+        .from('doctors')
+        .select()
+        .eq('clinic_id', clinicId)
+        .order('full_name');
+    return rows.map((r) => Doctor.fromJson(r)).toList();
+  }
+
+  /// The whole catalogue at [clinicId], retired services included. Admin view.
+  Future<List<Service>> fetchCatalogue(String clinicId) async {
+    final rows = await _db
+        .from('services')
+        .select()
+        .eq('clinic_id', clinicId)
+        .order('name');
+    return rows.map((r) => Service.fromJson(r)).toList();
+  }
+
+  /// Leave and closures at [clinicId] that have not ended yet. Staff only.
+  Future<List<TimeOff>> fetchTimeOff(String clinicId) async {
+    final rows = await _db
+        .from('doctor_time_off')
+        .select()
+        .eq('clinic_id', clinicId)
+        .gte('ends_on', _date(DateTime.now()))
+        .order('starts_on');
+    return rows.map((r) => TimeOff.fromJson(r)).toList();
   }
 
   /// The charts held at [clinicId], sorted by name. Sorted here because
@@ -300,6 +348,66 @@ class HealthRepository {
     return id as String;
   }
 
+  // ── Roster, catalogue and time off (admins; a doctor their own schedule) ──
+
+  /// Adds a doctor to [clinicId]'s roster.
+  Future<void> addDoctor({
+    required String clinicId,
+    required String name,
+    required String specialty,
+    required List<int> weekdays,
+    required List<String> timeSlots,
+  }) =>
+      _db.from('doctors').insert({
+        'clinic_id': clinicId,
+        'full_name': name,
+        'specialty': specialty,
+        'available_weekdays': weekdays,
+        'available_time_slots': timeSlots,
+      });
+
+  /// Changes a roster row. The database lets a doctor change only their own
+  /// weekdays and time slots; everything else is the admin's.
+  Future<void> updateDoctor(String doctorId, Map<String, Object?> changes) =>
+      _db.from('doctors').update(changes).eq('id', doctorId);
+
+  Future<void> addService({
+    required String clinicId,
+    required String name,
+    required int durationMinutes,
+    double? price,
+  }) =>
+      _db.from('services').insert({
+        'clinic_id': clinicId,
+        'name': name,
+        'duration_minutes': durationMinutes,
+        'price': price,
+      });
+
+  /// Services are retired (`is_active: false`), never deleted: past visits
+  /// point at them.
+  Future<void> updateService(String serviceId, Map<String, Object?> changes) =>
+      _db.from('services').update(changes).eq('id', serviceId);
+
+  /// Books leave for [doctorId], or closes the whole clinic when it is null.
+  Future<void> addTimeOff({
+    required String clinicId,
+    String? doctorId,
+    required DateTime startsOn,
+    required DateTime endsOn,
+    String? reason,
+  }) =>
+      _db.from('doctor_time_off').insert({
+        'clinic_id': clinicId,
+        'doctor_id': doctorId,
+        'starts_on': _date(startsOn),
+        'ends_on': _date(endsOn),
+        'reason': (reason?.trim().isEmpty ?? true) ? null : reason!.trim(),
+      });
+
+  Future<void> deleteTimeOff(String id) =>
+      _db.from('doctor_time_off').delete().eq('id', id);
+
   Future<void> updateMyProfile({String? fullName, String? phone}) async {
     final uid = _uid;
     if (uid == null) return;
@@ -459,3 +567,9 @@ class HealthRepository {
 
   Future<void> signOut() => _db.auth.signOut();
 }
+
+/// `2026-09-23` — a calendar day, as Postgres `date` takes it.
+String _date(DateTime day) =>
+    '${day.year.toString().padLeft(4, '0')}-'
+    '${day.month.toString().padLeft(2, '0')}-'
+    '${day.day.toString().padLeft(2, '0')}';

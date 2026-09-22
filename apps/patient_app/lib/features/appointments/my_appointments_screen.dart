@@ -29,17 +29,13 @@ class _MyAppointmentsScreenState
 
     // Tab labels carry counts, so they can only be built once the data is in.
     final all = allAsync.value ?? const <Appointment>[];
-    final upcoming = all
-        .where((a) =>
-            a.dateTime.isAfter(now) &&
-            a.status != AppointmentStatus.cancelled)
-        .toList()
+    // Upcoming: still to come, or happening now (checked in, or with the
+    // doctor, even though the start time has passed).
+    bool isUpcoming(Appointment a) =>
+        a.status.holdsTime && (a.dateTime.isAfter(now) || a.status.isOnSite);
+    final upcoming = all.where(isUpcoming).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
-    final past = all
-        .where((a) =>
-            !a.dateTime.isAfter(now) ||
-            a.status == AppointmentStatus.cancelled)
-        .toList()
+    final past = all.where((a) => !isUpcoming(a)).toList()
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
     return Scaffold(

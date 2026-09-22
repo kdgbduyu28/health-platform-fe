@@ -68,7 +68,10 @@ class _Landing extends ConsumerWidget {
                                 color: cs.primary),
                             title: Text(s.name),
                             trailing: Text(
-                              '${s.durationMinutes} min',
+                              [
+                                '${s.durationMinutes} min',
+                                if (s.priceLabel != null) s.priceLabel!,
+                              ].join(' · '),
                               style: TextStyle(color: cs.onSurfaceVariant),
                             ),
                           ),

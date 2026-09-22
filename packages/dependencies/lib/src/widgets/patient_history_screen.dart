@@ -145,7 +145,7 @@ class PreviousVisitsSection extends ConsumerWidget {
                   .where((a) =>
                       a.id != appointment.id &&
                       a.dateTime.isBefore(appointment.dateTime) &&
-                      a.status != AppointmentStatus.cancelled)
+                      a.status.holdsTime)
                   .take(limit)
                   .toList();
               if (earlier.isEmpty) {
@@ -336,7 +336,7 @@ class _Stats extends StatelessWidget {
         visits.where((a) => a.status == AppointmentStatus.completed).toList();
     final upcoming = visits
         .where((a) =>
-            a.dateTime.isAfter(now) && a.status != AppointmentStatus.cancelled)
+            a.dateTime.isAfter(now) && a.status.holdsTime)
         .length;
     final last = completed.isEmpty ? null : completed.first.dateTime;
 
@@ -391,7 +391,7 @@ class _Visits extends StatelessWidget {
     final open = onOpen;
 
     bool isUpcoming(Appointment a) =>
-        a.dateTime.isAfter(now) && a.status != AppointmentStatus.cancelled;
+        a.dateTime.isAfter(now) && a.status.holdsTime;
     final upcoming = visits.where(isUpcoming).toList().reversed.toList();
     final past = visits.where((a) => !isUpcoming(a)).toList();
 

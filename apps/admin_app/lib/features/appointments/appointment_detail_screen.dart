@@ -29,7 +29,6 @@ class AdminAppointmentDetailScreen extends ConsumerWidget {
 
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final notifier = ref.read(appointmentsProvider.notifier);
     void openHistory() =>
         context.pushInClinic('/patients/${appointment.patient.id}');
 
@@ -137,80 +136,74 @@ class AdminAppointmentDetailScreen extends ConsumerWidget {
           PatientNoteSection(appointment: appointment),
           const SizedBox(height: 12),
 
-          // Action buttons
-          if (appointment.status == AppointmentStatus.pending) ...[
-            FilledButton.icon(
-              onPressed: () {
-                notifier.updateStatus(
-                    appointment.id, AppointmentStatus.confirmed);
-                _showSnack(context, 'Appointment confirmed');
-              },
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Confirm Appointment'),
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (appointment.status == AppointmentStatus.confirmed) ...[
-            FilledButton.icon(
-              onPressed: () {
-                notifier.updateStatus(
-                    appointment.id, AppointmentStatus.completed);
-                _showSnack(context, 'Marked as completed');
-                context.pop();
-              },
-              icon: const Icon(Icons.task_alt),
-              label: const Text('Mark as Completed'),
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (appointment.status == AppointmentStatus.pending ||
-              appointment.status == AppointmentStatus.confirmed) ...[
-            OutlinedButton.icon(
-              onPressed: () => _showCancelDialog(context, appointment, notifier),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
-              ),
-              icon: const Icon(Icons.cancel_outlined),
-              label: const Text('Cancel Appointment'),
-            ),
-          ],
+          // The visit's next steps. An admin may take any of them.
+          ..._actions(context, ref, appointment),
         ],
       ),
     );
   }
 
-  void _showSnack(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      behavior: SnackBarBehavior.floating,
-    ));
-  }
-
-  void _showCancelDialog(BuildContext context, Appointment appointment,
-      AppointmentsNotifier notifier) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Appointment'),
-        content: const Text('This will notify the patient. Continue?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Keep')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              notifier.updateStatus(
-                  appointment.id, AppointmentStatus.cancelled);
-              Navigator.pop(ctx);
-              context.pop();
+  List<Widget> _actions(
+      BuildContext context, WidgetRef ref, Appointment appointment) {
+    final a = appointment;
+    Widget step(AppointmentStatus to, IconData icon, String label, String done,
+            {bool thenClose = false}) =>
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: FilledButton.icon(
+            onPressed: () async {
+              final saved =
+                  await changeAppointmentStatus(context, ref, a, to, done: done);
+              if (saved && thenClose && context.mounted) context.pop();
             },
-            child: const Text('Cancel It'),
+            icon: Icon(icon),
+            label: Text(label),
           ),
-        ],
-      ),
-    );
+        );
+
+    return [
+      if (a.status == AppointmentStatus.pending)
+        step(AppointmentStatus.confirmed, Icons.check_circle_outline,
+            'Confirm appointment', 'Appointment confirmed'),
+      if (a.status == AppointmentStatus.confirmed)
+        step(AppointmentStatus.arrived, Icons.how_to_reg, 'Check in',
+            'Checked in'),
+      if (a.status == AppointmentStatus.confirmed ||
+          a.status == AppointmentStatus.arrived)
+        step(AppointmentStatus.inConsultation, Icons.play_arrow,
+            'Start consultation', 'Consultation started'),
+      if (a.status == AppointmentStatus.inConsultation)
+        step(AppointmentStatus.completed, Icons.task_alt, 'Complete visit',
+            'Visit completed',
+            thenClose: true),
+      if (a.status == AppointmentStatus.confirmed &&
+          !a.dateTime.isAfter(DateTime.now()))
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: OutlinedButton.icon(
+            onPressed: () => changeAppointmentStatus(
+                context, ref, a, AppointmentStatus.noShow,
+                done: 'Marked as a no-show'),
+            icon: const Icon(Icons.person_off_outlined),
+            label: const Text('Mark as no-show'),
+          ),
+        ),
+      if (a.status.staffCanCancel)
+        OutlinedButton.icon(
+          onPressed: () async {
+            final cancelled = await confirmAndCancelAppointment(
+                context, ref, a,
+                who: a.patient.name);
+            if (cancelled && context.mounted) context.pop();
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.error,
+            side: BorderSide(color: Theme.of(context).colorScheme.error),
+          ),
+          icon: const Icon(Icons.cancel_outlined),
+          label: const Text('Cancel appointment'),
+        ),
+    ];
   }
 }
 

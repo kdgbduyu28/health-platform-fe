@@ -6,6 +6,9 @@ import '../features/dashboard/dashboard_screen.dart';
 import '../features/schedule/schedule_screen.dart';
 import '../features/appointments/appointment_detail_screen.dart';
 import '../features/clinic/clinic_settings_screen.dart';
+import '../features/roster/closures_screen.dart';
+import '../features/roster/doctors_screen.dart';
+import '../features/roster/services_screen.dart';
 
 /// /:clinic/dashboard           Dashboard tab (home)
 /// /:clinic/schedule            Schedule tab
@@ -13,6 +16,9 @@ import '../features/clinic/clinic_settings_screen.dart';
 /// /:clinic/patients/:id
 /// /:clinic/appointments/:id
 /// /:clinic/settings            Clinic tab
+/// /:clinic/settings/doctors    roster and working hours
+/// /:clinic/settings/services   what can be booked, how long, how much
+/// /:clinic/settings/closures   holidays and doctors' leave
 ///
 /// A branch admin is held to their one branch by the router's redirect; a
 /// full admin of several switches between them from the title.
@@ -61,6 +67,20 @@ final adminRouterProvider = Provider<GoRouter>(
             GoRoute(
               path: 'settings',
               builder: (_, __) => const ClinicSettingsScreen(),
+              routes: [
+                GoRoute(
+                  path: 'doctors',
+                  builder: (_, __) => const DoctorsScreen(),
+                ),
+                GoRoute(
+                  path: 'services',
+                  builder: (_, __) => const ServicesScreen(),
+                ),
+                GoRoute(
+                  path: 'closures',
+                  builder: (_, __) => const ClosuresScreen(),
+                ),
+              ],
             ),
           ]),
         ],

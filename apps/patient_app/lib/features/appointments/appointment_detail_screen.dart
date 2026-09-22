@@ -30,8 +30,7 @@ class AppointmentDetailScreen extends ConsumerWidget {
 
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final canCancel = appointment.status == AppointmentStatus.pending ||
-        appointment.status == AppointmentStatus.confirmed;
+    final canCancel = appointment.status.patientCanCancel;
 
     return Scaffold(
       appBar: AppBar(

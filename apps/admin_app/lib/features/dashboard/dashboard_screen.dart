@@ -19,8 +19,8 @@ class DashboardScreen extends ConsumerWidget {
 
     final pending =
         todayAppts.where((a) => a.status == AppointmentStatus.pending).length;
-    final confirmed =
-        todayAppts.where((a) => a.status == AppointmentStatus.confirmed).length;
+    // Checked in and waiting, or with a doctor.
+    final inClinic = todayAppts.where((a) => a.status.isOnSite).length;
     final completed =
         todayAppts.where((a) => a.status == AppointmentStatus.completed).length;
 
@@ -86,10 +86,10 @@ class DashboardScreen extends ConsumerWidget {
                         color: AppointmentStatus.pending.color),
                     const SizedBox(width: 8),
                     _StatCard(
-                        label: 'Confirmed',
-                        value: confirmed,
-                        icon: Icons.check_circle_outline,
-                        color: AppointmentStatus.confirmed.color),
+                        label: 'In clinic',
+                        value: inClinic,
+                        icon: Icons.chair_outlined,
+                        color: AppointmentStatus.arrived.color),
                     const SizedBox(width: 8),
                     _StatCard(
                         label: 'Done',

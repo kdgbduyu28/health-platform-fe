@@ -30,6 +30,9 @@ class ClinicSettingsScreen extends ConsumerWidget {
               children: [
                 _DetailsCard(clinic: clinic),
                 const SizedBox(height: 24),
+                const _SectionTitle('Bookings'),
+                const _BookingsCard(),
+                const SizedBox(height: 24),
                 const _SectionTitle('Patient join code'),
                 _JoinCodeCard(clinic: clinic),
                 const SizedBox(height: 24),
@@ -737,6 +740,50 @@ class _InviteDialogState extends State<_InviteDialog> {
           child: Text(isEdit ? 'Save' : 'Add'),
         ),
       ],
+    );
+  }
+}
+
+/// Where what patients can book is set up: who, what, and when not.
+class _BookingsCard extends ConsumerWidget {
+  const _BookingsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final doctors = ref.watch(rosterProvider).value;
+    final services = ref.watch(catalogueProvider).value;
+    final timeOff = ref.watch(timeOffProvider).value;
+    String? count(List<Object>? list, String one, String many) => list == null
+        ? null
+        : '${list.length} ${list.length == 1 ? one : many}';
+
+    Widget tile(IconData icon, String title, String? subtitle, String path) =>
+        ListTile(
+          leading: Icon(icon),
+          title: Text(title),
+          subtitle: subtitle == null ? null : Text(subtitle),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.pushInClinic(path),
+        );
+
+    return Card(
+      child: Column(
+        children: [
+          tile(Icons.badge_outlined, 'Doctors & hours',
+              count(doctors, 'doctor', 'doctors'), '/settings/doctors'),
+          const Divider(height: 1, indent: 56),
+          tile(Icons.medical_services_outlined, 'Services & prices',
+              count(services, 'service', 'services'), '/settings/services'),
+          const Divider(height: 1, indent: 56),
+          tile(Icons.event_busy_outlined, 'Closures & leave',
+              timeOff == null
+                  ? null
+                  : timeOff.isEmpty
+                      ? 'None coming up'
+                      : '${timeOff.length} coming up',
+              '/settings/closures'),
+        ],
+      ),
     );
   }
 }

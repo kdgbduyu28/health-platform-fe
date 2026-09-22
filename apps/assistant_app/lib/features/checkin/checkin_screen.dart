@@ -29,15 +29,8 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
           a.patient.phone.contains(_query);
     }).toList();
 
-    final pending = todayAppts
-        .where((a) => a.status == AppointmentStatus.pending)
-        .length;
-    final confirmed = todayAppts
-        .where((a) => a.status == AppointmentStatus.confirmed)
-        .length;
-    final completed = todayAppts
-        .where((a) => a.status == AppointmentStatus.completed)
-        .length;
+    int count(AppointmentStatus s) =>
+        todayAppts.where((a) => a.status == s).length;
 
     return Scaffold(
       body: CustomScrollView(
@@ -65,20 +58,18 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                       horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
-                      _StatPill(
-                          label: 'Pending',
-                          value: pending,
-                          color: AppointmentStatus.pending.color),
-                      const SizedBox(width: 8),
-                      _StatPill(
-                          label: 'Confirmed',
-                          value: confirmed,
-                          color: AppointmentStatus.confirmed.color),
-                      const SizedBox(width: 8),
-                      _StatPill(
-                          label: 'Completed',
-                          value: completed,
-                          color: AppointmentStatus.completed.color),
+                      for (final (i, (label, status)) in const [
+                        ('To confirm', AppointmentStatus.pending),
+                        ('Expected', AppointmentStatus.confirmed),
+                        ('Waiting', AppointmentStatus.arrived),
+                        ('Seen', AppointmentStatus.completed),
+                      ].indexed) ...[
+                        if (i > 0) const SizedBox(width: 8),
+                        _StatPill(
+                            label: label,
+                            value: count(status),
+                            color: status.color),
+                      ],
                     ],
                   ),
                 ),
@@ -194,7 +185,6 @@ class _CheckInCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
-    final notifier = ref.read(appointmentsProvider.notifier);
     final timeStr = DateFormat('h:mm a').format(appointment.dateTime);
 
     return Card(
@@ -250,77 +240,99 @@ class _CheckInCard extends ConsumerWidget {
                 ),
               ],
             ),
-            if (appointment.status == AppointmentStatus.pending ||
-                appointment.status == AppointmentStatus.confirmed) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (appointment.status == AppointmentStatus.pending)
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => notifier.updateStatus(
-                            appointment.id, AppointmentStatus.confirmed),
-                        icon: const Icon(Icons.check, size: 16),
-                        label: const Text('Confirm'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 36),
-                          textStyle: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                    ),
-                  if (appointment.status == AppointmentStatus.confirmed)
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => notifier.updateStatus(
-                            appointment.id, AppointmentStatus.completed),
-                        icon: const Icon(Icons.task_alt, size: 16),
-                        label: const Text('Check In'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 36),
-                          textStyle: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(width: 8),
-                  OutlinedButton(
-                    onPressed: () => _cancel(context, notifier),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      minimumSize: const Size(0, 36),
-                      textStyle: const TextStyle(fontSize: 13),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ],
-              ),
-            ],
+            ..._actions(context, ref, cs),
           ],
         ),
       ),
     );
   }
 
-  void _cancel(BuildContext context, AppointmentsNotifier notifier) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Appointment'),
-        content: Text('Cancel ${appointment.patient.name}\'s appointment?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Keep')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              notifier.updateStatus(
-                  appointment.id, AppointmentStatus.cancelled);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Cancel'),
+  /// What the front desk can do next with this visit.
+  List<Widget> _actions(BuildContext context, WidgetRef ref, ColorScheme cs) {
+    final a = appointment;
+    final since = switch (a.status) {
+      AppointmentStatus.arrived when a.arrivedAt != null =>
+        'Waiting since ${DateFormat.jm().format(a.arrivedAt!)}',
+      AppointmentStatus.inConsultation when a.startedAt != null =>
+        'With the doctor since ${DateFormat.jm().format(a.startedAt!)}',
+      _ => null,
+    };
+    final buttons = <Widget>[
+      if (a.status == AppointmentStatus.pending)
+        _Primary(
+          icon: Icons.check,
+          label: 'Confirm',
+          onPressed: () => changeAppointmentStatus(
+              context, ref, a, AppointmentStatus.confirmed,
+              done: 'Appointment confirmed'),
+        ),
+      if (a.status == AppointmentStatus.confirmed)
+        _Primary(
+          icon: Icons.how_to_reg,
+          label: 'Check in',
+          onPressed: () => changeAppointmentStatus(
+              context, ref, a, AppointmentStatus.arrived,
+              done: '${a.patient.name} is in the waiting room'),
+        ),
+      // Only once the time has come: the database refuses it earlier.
+      if (a.status == AppointmentStatus.confirmed &&
+          !a.dateTime.isAfter(DateTime.now()))
+        TextButton(
+          onPressed: () => changeAppointmentStatus(
+              context, ref, a, AppointmentStatus.noShow,
+              done: 'Marked as a no-show'),
+          child: const Text('No-show'),
+        ),
+      if (a.status.staffCanCancel)
+        OutlinedButton(
+          onPressed: () => confirmAndCancelAppointment(context, ref, a,
+              who: a.patient.name),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: cs.error,
+            side: BorderSide(color: cs.error),
+            minimumSize: const Size(0, 36),
+            textStyle: const TextStyle(fontSize: 13),
           ),
-        ],
+          child: const Text('Cancel'),
+        ),
+    ];
+    return [
+      if (since != null) ...[
+        const SizedBox(height: 8),
+        Text(since,
+            style: TextStyle(
+                color: a.status.color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600)),
+      ],
+      if (buttons.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: buttons),
+      ],
+    ];
+  }
+}
+
+class _Primary extends StatelessWidget {
+  const _Primary({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(label),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 36),
+        textStyle: const TextStyle(fontSize: 13),
       ),
     );
   }

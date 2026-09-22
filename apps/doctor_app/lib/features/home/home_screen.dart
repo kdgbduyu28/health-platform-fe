@@ -36,7 +36,7 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
         .where((a) =>
             a.dateTime.isAfter(DateTime.now()) &&
             !a.isToday &&
-            a.status != AppointmentStatus.cancelled)
+            a.status.holdsTime)
         .toList();
     // Newest first: the visit a doctor looks back at is usually the last one.
     final past = (allAsync.value ?? const <Appointment>[])
@@ -115,38 +115,19 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                 color: cs.surfaceContainerLow,
                 child: Row(
                   children: [
-                    _MiniStat(
-                      label: 'Today',
-                      value: todayAppts.length,
-                      color: cs.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    _MiniStat(
-                      label: 'Pending',
-                      value: todayAppts
-                          .where((a) =>
-                              a.status == AppointmentStatus.pending)
-                          .length,
-                      color: AppointmentStatus.pending.color,
-                    ),
-                    const SizedBox(width: 12),
-                    _MiniStat(
-                      label: 'Confirmed',
-                      value: todayAppts
-                          .where((a) =>
-                              a.status == AppointmentStatus.confirmed)
-                          .length,
-                      color: AppointmentStatus.confirmed.color,
-                    ),
-                    const SizedBox(width: 12),
-                    _MiniStat(
-                      label: 'Done',
-                      value: todayAppts
-                          .where((a) =>
-                              a.status == AppointmentStatus.completed)
-                          .length,
-                      color: AppointmentStatus.completed.color,
-                    ),
+                    for (final (i, (label, status)) in const [
+                      ('Waiting', AppointmentStatus.arrived),
+                      ('With you', AppointmentStatus.inConsultation),
+                      ('Expected', AppointmentStatus.confirmed),
+                      ('Done', AppointmentStatus.completed),
+                    ].indexed) ...[
+                      if (i > 0) const SizedBox(width: 12),
+                      _MiniStat(
+                        label: label,
+                        value: todayAppts.where((a) => a.status == status).length,
+                        color: status.color,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -157,11 +138,7 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                   AsyncView(
                     value: todayAsync,
                     onRetry: () => ref.invalidate(appointmentsProvider),
-                    builder: (today) => _AppointmentListTab(
-                      appointments: today,
-                      emptyMessage: 'No appointments today',
-                      showTime: true,
-                    ),
+                    builder: (today) => _TodayQueue(appointments: today),
                   ),
                   AsyncView(
                     value: allAsync,
@@ -253,10 +230,20 @@ class _AppointmentListTab extends StatelessWidget {
 }
 
 class _DoctorApptCard extends StatelessWidget {
-  const _DoctorApptCard(
-      {required this.appointment, required this.showTime});
+  const _DoctorApptCard({
+    required this.appointment,
+    required this.showTime,
+    this.action,
+    this.highlight = false,
+  });
   final Appointment appointment;
   final bool showTime;
+
+  /// The next step for this visit (Start, Complete), under its details.
+  final Widget? action;
+
+  /// The patient to call in next.
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
@@ -264,6 +251,12 @@ class _DoctorApptCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
+      shape: highlight
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: appointment.status.color, width: 2),
+            )
+          : null,
       child: InkWell(
         onTap: () =>
             context.pushInClinic('/appointments/${appointment.id}'),
@@ -328,6 +321,17 @@ class _DoctorApptCard extends StatelessWidget {
                             fontSize: 12,
                             color: cs.primary),
                       ),
+                    if (appointment.status == AppointmentStatus.arrived &&
+                        appointment.arrivedAt != null)
+                      Text(
+                        'Arrived ${DateFormat.jm().format(appointment.arrivedAt!)}',
+                        style: TextStyle(
+                            fontSize: 12, color: appointment.status.color),
+                      ),
+                    if (action != null) ...[
+                      const SizedBox(height: 8),
+                      action!,
+                    ],
                   ],
                 ),
               ),
@@ -335,6 +339,110 @@ class _DoctorApptCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Today, as a doctor works through it: who is in with them, who is in the
+/// waiting room (in order of arrival), who is still to come, and who is done.
+class _TodayQueue extends ConsumerWidget {
+  const _TodayQueue({required this.appointments});
+
+  final List<Appointment> appointments;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    List<Appointment> where(bool Function(AppointmentStatus) test) =>
+        [...appointments.where((a) => test(a.status))];
+
+    final withMe = where((s) => s == AppointmentStatus.inConsultation);
+    final waiting = where((s) => s == AppointmentStatus.arrived)
+      ..sort((a, b) => (a.arrivedAt ?? a.dateTime)
+          .compareTo(b.arrivedAt ?? b.dateTime));
+    final later = where((s) =>
+        s == AppointmentStatus.pending || s == AppointmentStatus.confirmed);
+    final done = where((s) => !s.isOpen);
+
+    if (appointments.isEmpty) {
+      return const _AppointmentListTab(
+        appointments: [],
+        emptyMessage: 'No appointments today',
+        showTime: true,
+      );
+    }
+
+    Widget start(Appointment a) => FilledButton.tonalIcon(
+          onPressed: () => changeAppointmentStatus(
+              context, ref, a, AppointmentStatus.inConsultation,
+              done: 'Consultation with ${a.patient.name} started'),
+          icon: const Icon(Icons.play_arrow, size: 18),
+          label: const Text('Start consultation'),
+        );
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (withMe.isNotEmpty) ...[
+          const _QueueHeader('With you now'),
+          for (final a in withMe)
+            _DoctorApptCard(
+              appointment: a,
+              showTime: true,
+              highlight: true,
+              action: FilledButton.icon(
+                onPressed: () => changeAppointmentStatus(
+                    context, ref, a, AppointmentStatus.completed,
+                    done: 'Visit completed'),
+                icon: const Icon(Icons.task_alt, size: 18),
+                label: const Text('Complete visit'),
+              ),
+            ),
+        ],
+        if (waiting.isNotEmpty) ...[
+          _QueueHeader('Waiting room (${waiting.length})'),
+          for (final (i, a) in waiting.indexed)
+            _DoctorApptCard(
+              appointment: a,
+              showTime: true,
+              highlight: i == 0 && withMe.isEmpty,
+              action: start(a),
+            ),
+        ],
+        if (later.isNotEmpty) ...[
+          const _QueueHeader('Later today'),
+          for (final a in later)
+            _DoctorApptCard(
+              appointment: a,
+              showTime: true,
+              // Clinics with nobody at the desk start straight from here.
+              action: a.status == AppointmentStatus.confirmed ? start(a) : null,
+            ),
+        ],
+        if (done.isNotEmpty) ...[
+          const _QueueHeader('Done today'),
+          for (final a in done) _DoctorApptCard(appointment: a, showTime: true),
+        ],
+      ],
+    );
+  }
+}
+
+class _QueueHeader extends StatelessWidget {
+  const _QueueHeader(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+      child: Text(
+        text,
+        style: Theme.of(context)
+            .textTheme
+            .titleSmall
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }

@@ -117,7 +117,7 @@ final upcomingAppointmentsProvider =
         (list) => [
           ...list.where((a) =>
               a.dateTime.isAfter(now) &&
-              a.status != AppointmentStatus.cancelled)
+              a.status.holdsTime)
         ]..sort((a, b) => a.dateTime.compareTo(b.dateTime)),
       );
 });
@@ -145,7 +145,7 @@ final myUpcomingAppointmentsProvider =
         (list) => [
           ...list.where((a) =>
               a.dateTime.isAfter(now) &&
-              a.status != AppointmentStatus.cancelled)
+              a.status.holdsTime)
         ]..sort((a, b) => a.dateTime.compareTo(b.dateTime)),
       );
 });
