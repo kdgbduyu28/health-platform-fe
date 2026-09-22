@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/app_notification.dart';
 import '../models/app_role.dart';
 import '../models/appointment.dart';
 import '../models/appointment_status.dart';
@@ -7,6 +8,7 @@ import '../models/clinic.dart';
 import '../models/clinic_page.dart';
 import '../models/clinical_note.dart';
 import '../models/doctor.dart';
+import '../models/invoice.dart';
 import '../models/membership.dart';
 import '../models/patient.dart';
 import '../models/profile.dart';
@@ -22,9 +24,14 @@ import '../models/time_off.dart';
 /// tenant. The clinic filters that do appear below only pick ONE clinic out of
 /// several a user legitimately belongs to.
 class HealthRepository {
-  HealthRepository(this._db);
+  HealthRepository(this._db, {Future<void> Function()? beforeSignOut})
+      : _beforeSignOut = beforeSignOut;
 
   final SupabaseClient _db;
+
+  /// Runs while the session still exists: forgetting this browser's push
+  /// subscription needs the account it belongs to.
+  final Future<void> Function()? _beforeSignOut;
 
   static const _clinicSelect =
       '*, clinic_type:clinic_types(display_name, icon_name)';
@@ -36,6 +43,10 @@ class HealthRepository {
   /// single-column FKs whenever they add a composite one.
   static const _appointmentSelect =
       '*, patient:patients(*, person:persons(*)), doctor:doctors(*)';
+
+  static const _invoiceSelect = '*, items:invoice_items(*), payments(*), '
+      'patient:patients(*, person:persons(*)), '
+      'appointment:appointments(service_name, scheduled_at)';
 
   static const _historySelect =
       '$_appointmentSelect, visit_note:visit_notes(*)';
@@ -140,15 +151,20 @@ class HealthRepository {
   /// The times [doctorId] can still take a [serviceId]-long visit on [day]
   /// (the clinic's calendar day), from `public.available_slots`: working
   /// days only, nobody's leave, nothing past, nothing overlapping.
+  ///
+  /// [ignoreAppointmentId] leaves one visit out — the one being moved — so
+  /// it does not block the times around its own.
   Future<List<DateTime>> fetchAvailableSlots({
     required String doctorId,
     required DateTime day,
     String? serviceId,
+    String? ignoreAppointmentId,
   }) async {
     final rows = await _db.rpc('available_slots', params: {
       'p_doctor_id': doctorId,
       'p_date': _date(day),
       'p_service_id': serviceId,
+      if (ignoreAppointmentId != null) 'p_ignore': ignoreAppointmentId,
     }) as List<dynamic>;
     return [for (final t in rows) DateTime.parse(t as String).toLocal()];
   }
@@ -285,6 +301,20 @@ class HealthRepository {
           .from('appointments')
           .update({'status': status.wire}).eq('id', appointmentId);
 
+  /// Moves a visit that has not started to [scheduledAt] — and, for staff,
+  /// to [doctorId]. A patient may take only an offered time, and their visit
+  /// goes back to pending for the clinic to confirm; staff keep its status.
+  Future<void> reschedule(
+    String appointmentId,
+    DateTime scheduledAt, {
+    String? doctorId,
+  }) =>
+      _db.rpc('reschedule_appointment', params: {
+        'p_appointment_id': appointmentId,
+        'p_scheduled_at': scheduledAt.toUtc().toIso8601String(),
+        'p_doctor_id': doctorId,
+      });
+
   /// Sets the note the patient reads on this appointment; blank clears it.
   /// The database lets only the clinic's doctors and admins change it.
   Future<void> updatePatientNote(String appointmentId, String? note) {
@@ -416,6 +446,220 @@ class HealthRepository {
       if (phone != null) 'phone': phone,
     }).eq('id', uid);
   }
+
+  // ── Billing ───────────────────────────────────────────────────────────────
+  // The database computes every total and moves every status; see
+  // 20260924120100_billing. The front desk and admins write, other staff
+  // read, a patient reads their own bills once issued.
+
+  /// Bills at [clinicId], newest first.
+  Future<List<Invoice>> fetchInvoices(String clinicId) async {
+    final rows = await _db
+        .from('invoices')
+        .select(_invoiceSelect)
+        .eq('clinic_id', clinicId)
+        .order('created_at', ascending: false)
+        .limit(300);
+    return rows.map((r) => Invoice.fromJson(r)).toList();
+  }
+
+  /// Bills on one chart, newest first. For a patient, RLS already leaves
+  /// out drafts.
+  Future<List<Invoice>> fetchPatientInvoices(String patientId) async {
+    final rows = await _db
+        .from('invoices')
+        .select(_invoiceSelect)
+        .eq('patient_id', patientId)
+        .order('created_at', ascending: false);
+    return rows.map((r) => Invoice.fromJson(r)).toList();
+  }
+
+  Future<Invoice?> fetchInvoice(String invoiceId) async {
+    final row = await _db
+        .from('invoices')
+        .select(_invoiceSelect)
+        .eq('id', invoiceId)
+        .maybeSingle();
+    return row == null ? null : Invoice.fromJson(row);
+  }
+
+  /// The visit's live bill — not a voided one — or null.
+  Future<Invoice?> fetchAppointmentInvoice(String appointmentId) async {
+    final row = await _db
+        .from('invoices')
+        .select(_invoiceSelect)
+        .eq('appointment_id', appointmentId)
+        .neq('status', InvoiceStatus.voided.wire)
+        .maybeSingle();
+    return row == null ? null : Invoice.fromJson(row);
+  }
+
+  /// A draft for the visit with its service as the first line, or its
+  /// existing bill. Returns the bill's id.
+  Future<String> createInvoiceForAppointment(String appointmentId) async {
+    final id = await _db.rpc('create_invoice_for_appointment',
+        params: {'p_appointment_id': appointmentId});
+    return id as String;
+  }
+
+  /// An empty draft for a chart, not tied to a visit.
+  Future<String> createInvoice({
+    required String clinicId,
+    required String patientId,
+  }) async {
+    final row = await _db
+        .from('invoices')
+        .insert({'clinic_id': clinicId, 'patient_id': patientId})
+        .select('id')
+        .single();
+    return row['id'] as String;
+  }
+
+  Future<void> addInvoiceItem({
+    required String invoiceId,
+    required String clinicId,
+    required String description,
+    required double unitPrice,
+    int quantity = 1,
+    String? serviceId,
+  }) =>
+      _db.from('invoice_items').insert({
+        'invoice_id': invoiceId,
+        'clinic_id': clinicId,
+        'description': description.trim(),
+        'unit_price': unitPrice,
+        'quantity': quantity,
+        'service_id': serviceId,
+      });
+
+  Future<void> updateInvoiceItem(
+    String itemId, {
+    required String description,
+    required double unitPrice,
+    required int quantity,
+  }) =>
+      _db.from('invoice_items').update({
+        'description': description.trim(),
+        'unit_price': unitPrice,
+        'quantity': quantity,
+      }).eq('id', itemId);
+
+  Future<void> deleteInvoiceItem(String itemId) =>
+      _db.from('invoice_items').delete().eq('id', itemId);
+
+  /// The discount on a draft. Zero clears it.
+  Future<void> setInvoiceDiscount(
+    String invoiceId, {
+    required double amount,
+    String? reason,
+  }) =>
+      _db.from('invoices').update({
+        'discount_amount': amount,
+        'discount_reason':
+            amount == 0 || (reason?.trim().isEmpty ?? true) ? null : reason!.trim(),
+      }).eq('id', invoiceId);
+
+  Future<void> setInvoiceNotes(String invoiceId, String? notes) =>
+      _db.from('invoices').update({
+        'notes': (notes?.trim().isEmpty ?? true) ? null : notes!.trim(),
+      }).eq('id', invoiceId);
+
+  /// Numbers and locks the bill; returns its number.
+  Future<String> issueInvoice(String invoiceId) async {
+    final number =
+        await _db.rpc('issue_invoice', params: {'p_invoice_id': invoiceId});
+    return number as String;
+  }
+
+  Future<void> voidInvoice(String invoiceId, String reason) => _db.rpc(
+      'void_invoice',
+      params: {'p_invoice_id': invoiceId, 'p_reason': reason});
+
+  /// Drafts only; the database refuses the rest.
+  Future<void> deleteInvoice(String invoiceId) =>
+      _db.from('invoices').delete().eq('id', invoiceId);
+
+  Future<void> recordPayment({
+    required String invoiceId,
+    required String clinicId,
+    required double amount,
+    required PaymentMethod method,
+    String? reference,
+  }) =>
+      _db.from('payments').insert({
+        'invoice_id': invoiceId,
+        'clinic_id': clinicId,
+        'amount': amount,
+        'method': method.wire,
+        'reference': (reference?.trim().isEmpty ?? true) ? null : reference!.trim(),
+      });
+
+  /// Admins only.
+  Future<void> voidPayment(String paymentId, String reason) => _db.rpc(
+      'void_payment',
+      params: {'p_payment_id': paymentId, 'p_reason': reason});
+
+  Future<BillingSummary> fetchBillingSummary(
+    String clinicId, {
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final row = await _db.rpc('billing_summary', params: {
+      'p_clinic_id': clinicId,
+      'p_from': _date(from),
+      'p_to': _date(to),
+    });
+    return BillingSummary.fromJson(row as Map<String, dynamic>);
+  }
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+
+  /// The signed-in account's inbox, newest first, live over Realtime. RLS
+  /// sends each account only its own rows; [app] picks this app's.
+  Stream<List<AppNotification>> watchNotifications(AppRole app) {
+    final uid = _uid;
+    if (uid == null) return Stream.value(const []);
+    return _db
+        .from('notifications')
+        .stream(primaryKey: ['id'])
+        .eq('profile_id', uid)
+        .order('created_at')
+        .limit(100)
+        .map((rows) => [
+              for (final r in rows)
+                if (r['app'] == app.wire) AppNotification.fromJson(r),
+            ]);
+  }
+
+  /// Marks [ids] read; with none given, everything unread in [app].
+  Future<void> markNotificationsRead(AppRole app, {List<String>? ids}) {
+    var q = _db
+        .from('notifications')
+        .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('app', app.wire)
+        .isFilter('read_at', null);
+    if (ids != null) q = q.inFilter('id', ids);
+    return q;
+  }
+
+  /// Registers this browser for [app]'s pushes to the signed-in account.
+  Future<void> savePushSubscription({
+    required AppRole app,
+    required String endpoint,
+    required String p256dh,
+    required String auth,
+    String? userAgent,
+  }) =>
+      _db.rpc('save_push_subscription', params: {
+        'p_app': app.wire,
+        'p_endpoint': endpoint,
+        'p_p256dh': p256dh,
+        'p_auth': auth,
+        'p_user_agent': userAgent,
+      });
+
+  Future<void> deletePushSubscription(String endpoint) => _db
+      .rpc('delete_push_subscription', params: {'p_endpoint': endpoint});
 
   // ── Onboarding ────────────────────────────────────────────────────────────
 
@@ -565,7 +809,15 @@ class HealthRepository {
         data: {'full_name': fullName},
       );
 
-  Future<void> signOut() => _db.auth.signOut();
+  /// Signs out — after unhooking this browser's push notifications, so the
+  /// next person to use it does not receive this account's. That step never
+  /// holds up signing out.
+  Future<void> signOut() async {
+    try {
+      await _beforeSignOut?.call().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    await _db.auth.signOut();
+  }
 }
 
 /// `2026-09-23` — a calendar day, as Postgres `date` takes it.

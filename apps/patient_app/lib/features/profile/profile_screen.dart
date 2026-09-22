@@ -91,6 +91,12 @@ class ProfileScreen extends ConsumerWidget {
                         value: '${patient!.age} years old',
                       ),
                     const SizedBox(height: 24),
+                    FilledButton.tonalIcon(
+                      onPressed: () => context.pushInClinic('/bills'),
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: const Text('Bills & payments'),
+                    ),
+                    const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
                         builder: (_) => const JoinClinicScreen(),

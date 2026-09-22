@@ -87,6 +87,12 @@ class AppointmentDetailScreen extends ConsumerWidget {
                 label: 'Time',
                 value: DateFormat('h:mm a').format(appointment.dateTime),
               ),
+              if (appointment.rescheduledFrom case final from?)
+                _InfoTile(
+                  icon: Icons.update,
+                  label: 'Moved from',
+                  value: DateFormat('EEE, MMM d · h:mm a').format(from),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -135,6 +141,21 @@ class AppointmentDetailScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
+          ],
+
+          VisitBillSection(
+            appointment: appointment,
+            onOpenInvoice: (id) => context.pushInClinic('/bills/$id'),
+          ),
+
+          if (appointment.canReschedule) ...[
+            const SizedBox(height: 8),
+            FilledButton.tonalIcon(
+              onPressed: () =>
+                  showRescheduleSheet(context, appointment, staff: false),
+              icon: const Icon(Icons.edit_calendar_outlined),
+              label: const Text('Reschedule'),
+            ),
           ],
 
           // Cancel button

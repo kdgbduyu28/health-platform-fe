@@ -66,6 +66,12 @@ class DoctorAppointmentDetailScreen extends ConsumerWidget {
                   style: TextStyle(
                       color: cs.onPrimary.withAlpha(210), fontSize: 13),
                 ),
+                if (appointment.rescheduledFrom case final from?)
+                  Text(
+                    'Moved from ${DateFormat('EEE, MMM d · h:mm a').format(from)}',
+                    style: TextStyle(
+                        color: cs.onPrimary.withAlpha(180), fontSize: 12),
+                  ),
               ],
             ),
           ),

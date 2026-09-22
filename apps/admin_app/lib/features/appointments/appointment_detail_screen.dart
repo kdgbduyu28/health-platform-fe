@@ -64,6 +64,11 @@ class AdminAppointmentDetailScreen extends ConsumerWidget {
                     '${DateFormat('EEE, MMM d').format(appointment.dateTime)}  ·  ${DateFormat('h:mm a').format(appointment.dateTime)}',
                     style: TextStyle(
                         color: cs.onPrimary.withAlpha(210), fontSize: 13)),
+                if (appointment.rescheduledFrom case final from?)
+                  Text(
+                      'Moved from ${DateFormat('EEE, MMM d · h:mm a').format(from)}',
+                      style: TextStyle(
+                          color: cs.onPrimary.withAlpha(180), fontSize: 12)),
               ],
             ),
           ),
@@ -135,6 +140,10 @@ class AdminAppointmentDetailScreen extends ConsumerWidget {
           VisitNoteSection(appointment: appointment),
           PatientNoteSection(appointment: appointment),
           const SizedBox(height: 12),
+          VisitBillSection(
+            appointment: appointment,
+            onOpenInvoice: (id) => context.pushInClinic('/billing/$id'),
+          ),
 
           // The visit's next steps. An admin may take any of them.
           ..._actions(context, ref, appointment),
@@ -186,6 +195,15 @@ class AdminAppointmentDetailScreen extends ConsumerWidget {
                 done: 'Marked as a no-show'),
             icon: const Icon(Icons.person_off_outlined),
             label: const Text('Mark as no-show'),
+          ),
+        ),
+      if (a.canReschedule)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: OutlinedButton.icon(
+            onPressed: () => showRescheduleSheet(context, a, staff: true),
+            icon: const Icon(Icons.edit_calendar_outlined),
+            label: const Text('Reschedule'),
           ),
         ),
       if (a.status.staffCanCancel)

@@ -182,6 +182,7 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
                   doctorId: doctor.id,
                   day: DateTime.now(),
                   serviceId: _service?.id,
+                  ignore: null,
                 ))),
                 onRetry: () => ref.invalidate(availableSlotsProvider),
                 builder: (slots) => slots.isEmpty

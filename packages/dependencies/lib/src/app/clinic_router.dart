@@ -103,6 +103,12 @@ GoRouter createClinicRouter(
     ],
   );
 
+  // A push notification tapped while this app is already open in a tab.
+  // Only links inside the app: the payload is ours, but the check is cheap.
+  ref.read(browserPushProvider).onNotificationOpened((link) {
+    if (link.startsWith('/') && !link.startsWith('//')) router.go(link);
+  });
+
   ref.onDispose(router.dispose);
   ref.onDispose(refresh.dispose);
   return router;

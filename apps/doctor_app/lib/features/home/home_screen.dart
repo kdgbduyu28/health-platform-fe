@@ -92,6 +92,7 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                   ],
                 ),
               ),
+              const NotificationsButton(),
               const AccountMenuButton(),
               const SizedBox(width: 8),
             ],

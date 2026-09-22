@@ -47,7 +47,11 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                         ?.copyWith(fontWeight: FontWeight.bold)),
               ],
             ),
-            actions: const [AccountMenuButton(), SizedBox(width: 8)],
+            actions: const [
+              NotificationsButton(),
+              AccountMenuButton(),
+              SizedBox(width: 8),
+            ],
           ),
           SliverToBoxAdapter(
             child: Column(
@@ -283,6 +287,19 @@ class _CheckInCard extends ConsumerWidget {
               done: 'Marked as a no-show'),
           child: const Text('No-show'),
         ),
+      if (a.status == AppointmentStatus.arrived ||
+          a.status == AppointmentStatus.inConsultation ||
+          a.status == AppointmentStatus.completed)
+        _Primary(
+          icon: Icons.receipt_long_outlined,
+          label: 'Bill',
+          onPressed: () => _openBill(context, ref),
+        ),
+      if (a.canReschedule)
+        TextButton(
+          onPressed: () => showRescheduleSheet(context, a, staff: true),
+          child: const Text('Move'),
+        ),
       if (a.status.staffCanCancel)
         OutlinedButton(
           onPressed: () => confirmAndCancelAppointment(context, ref, a,
@@ -310,6 +327,26 @@ class _CheckInCard extends ConsumerWidget {
         Wrap(spacing: 8, runSpacing: 8, children: buttons),
       ],
     ];
+  }
+}
+
+extension on _CheckInCard {
+  /// The visit's bill — started with its service as the first line if it
+  /// has none yet.
+  Future<void> _openBill(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final id = await ref
+          .read(healthRepositoryProvider)
+          .createInvoiceForAppointment(appointment.id);
+      invalidateBilling(ref);
+      if (context.mounted) context.pushInClinic('/billing/$id');
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(describeError(e)),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 }
 

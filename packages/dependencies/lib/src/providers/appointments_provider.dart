@@ -80,6 +80,12 @@ class AppointmentsNotifier extends AsyncNotifier<List<Appointment>> {
     await refresh();
   }
 
+  /// Moves a visit; see [HealthRepository.reschedule].
+  Future<void> reschedule(String id, DateTime to, {String? doctorId}) async {
+    await ref.read(healthRepositoryProvider).reschedule(id, to, doctorId: doctorId);
+    await refresh();
+  }
+
   /// The note the patient reads. Blank clears it. The database refuses this
   /// from anyone but the clinic's doctors and admins.
   Future<void> updatePatientNote(String id, String? note) async {

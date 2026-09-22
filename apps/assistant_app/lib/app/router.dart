@@ -9,6 +9,8 @@ import '../features/booking/walkin_booking_screen.dart';
 /// /:clinic/walkin              Walk-In tab; ?patient= preselects a chart
 /// /:clinic/patients            Patients tab
 /// /:clinic/patients/:id
+/// /:clinic/billing             Billing tab
+/// /:clinic/billing/:id         one bill
 final assistantRouterProvider = Provider<GoRouter>(
   (ref) => createClinicRouter(
     ref,
@@ -16,6 +18,11 @@ final assistantRouterProvider = Provider<GoRouter>(
     routes: [
       // The front desk has no appointment screen, so visits are not tappable
       // here; booking hands the patient to the Walk-In tab instead.
+      GoRoute(
+        path: 'billing/:id',
+        builder: (_, state) =>
+            InvoiceScreen(invoiceId: state.pathParameters['id']!),
+      ),
       GoRoute(
         path: 'patients/:id',
         builder: (context, state) {
@@ -48,6 +55,14 @@ final assistantRouterProvider = Provider<GoRouter>(
               path: 'patients',
               builder: (context, _) => PatientDirectoryScreen(
                 onOpenPatient: (p) => context.pushInClinic('/patients/${p.id}'),
+              ),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: 'billing',
+              builder: (context, _) => BillingScreen(
+                onOpenInvoice: (id) => context.pushInClinic('/billing/$id'),
               ),
             ),
           ]),
@@ -84,6 +99,11 @@ class _NavScaffold extends StatelessWidget {
             icon: Icon(Icons.group_outlined),
             selectedIcon: Icon(Icons.group),
             label: 'Patients',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Billing',
           ),
         ],
       ),

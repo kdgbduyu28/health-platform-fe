@@ -7,6 +7,7 @@ import '../features/landing/clinic_landing_screen.dart';
 import '../features/appointments/my_appointments_screen.dart';
 import '../features/appointments/book_appointment_screen.dart';
 import '../features/appointments/appointment_detail_screen.dart';
+import '../features/billing/my_bills_screen.dart';
 import '../features/profile/profile_screen.dart';
 
 /// /:clinic                    the clinic's public page
@@ -14,6 +15,8 @@ import '../features/profile/profile_screen.dart';
 /// /:clinic/appointments       Appointments tab
 /// /:clinic/appointments/:id
 /// /:clinic/book
+/// /:clinic/bills              bills at this clinic
+/// /:clinic/bills/:id
 /// /:clinic/profile            Profile tab
 ///
 /// …plus sign-in and join, which `createClinicRouter` adds.
@@ -31,6 +34,15 @@ final patientRouterProvider = Provider<GoRouter>(
         path: 'appointments/:id',
         builder: (context, state) =>
             AppointmentDetailScreen(appointmentId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: 'bills',
+        builder: (_, __) => const MyBillsScreen(),
+      ),
+      GoRoute(
+        path: 'bills/:id',
+        builder: (_, state) =>
+            InvoiceScreen(invoiceId: state.pathParameters['id']!),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _NavScaffold(shell: shell),

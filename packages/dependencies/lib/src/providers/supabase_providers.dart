@@ -3,14 +3,31 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/health_repository.dart';
 import '../models/profile.dart';
+import '../push/browser_push.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>(
   (ref) => Supabase.instance.client,
 );
 
-final healthRepositoryProvider = Provider<HealthRepository>(
-  (ref) => HealthRepository(ref.watch(supabaseClientProvider)),
-);
+/// This browser's Web Push. Overridden in tests.
+final browserPushProvider = Provider<BrowserPush>((ref) => createBrowserPush());
+
+final healthRepositoryProvider = Provider<HealthRepository>((ref) {
+  final push = ref.watch(browserPushProvider);
+  late final HealthRepository repo;
+  repo = HealthRepository(
+    ref.watch(supabaseClientProvider),
+    // Forget this browser's subscription while the session can still prove
+    // whose it is, then drop it from the browser too.
+    beforeSignOut: () async {
+      final keys = await push.current();
+      if (keys == null) return;
+      await repo.deletePushSubscription(keys.endpoint);
+      await push.unsubscribe();
+    },
+  );
+  return repo;
+});
 
 /// Emits on sign-in, sign-out, and token refresh. Supabase pushes the current
 /// session as soon as you subscribe, so this settles without an extra read.

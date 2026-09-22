@@ -21,7 +21,11 @@ class ClinicSettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const ClinicPageTitle('Clinic settings'),
-        actions: const [AccountMenuButton(), SizedBox(width: 8)],
+        actions: const [
+              NotificationsButton(),
+              AccountMenuButton(),
+              SizedBox(width: 8),
+            ],
       ),
       body: clinic == null
           ? const SizedBox.shrink()

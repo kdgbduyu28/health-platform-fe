@@ -33,6 +33,7 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
             actions: [
+              const NotificationsButton(),
               Container(
                 margin: const EdgeInsets.only(right: 16),
                 padding:

@@ -15,6 +15,8 @@ import '../features/roster/services_screen.dart';
 /// /:clinic/patients            Patients tab
 /// /:clinic/patients/:id
 /// /:clinic/appointments/:id
+/// /:clinic/billing             Billing tab
+/// /:clinic/billing/:id         one bill
 /// /:clinic/settings            Clinic tab
 /// /:clinic/settings/doctors    roster and working hours
 /// /:clinic/settings/services   what can be booked, how long, how much
@@ -31,6 +33,11 @@ final adminRouterProvider = Provider<GoRouter>(
         path: 'appointments/:id',
         builder: (context, state) => AdminAppointmentDetailScreen(
             appointmentId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: 'billing/:id',
+        builder: (_, state) =>
+            InvoiceScreen(invoiceId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: 'patients/:id',
@@ -60,6 +67,14 @@ final adminRouterProvider = Provider<GoRouter>(
               path: 'patients',
               builder: (context, _) => PatientDirectoryScreen(
                 onOpenPatient: (p) => context.pushInClinic('/patients/${p.id}'),
+              ),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: 'billing',
+              builder: (context, _) => BillingScreen(
+                onOpenInvoice: (id) => context.pushInClinic('/billing/$id'),
               ),
             ),
           ]),
@@ -124,6 +139,11 @@ class _NavScaffold extends ConsumerWidget {
             icon: Icon(Icons.group_outlined),
             selectedIcon: Icon(Icons.group),
             label: 'Patients',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Billing',
           ),
           NavigationDestination(
             icon: clinicIcon(Icons.storefront_outlined),

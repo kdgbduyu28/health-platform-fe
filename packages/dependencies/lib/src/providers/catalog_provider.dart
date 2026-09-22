@@ -85,8 +85,14 @@ final timeOffProvider = FutureProvider<List<TimeOff>>((ref) async {
   return ref.watch(healthRepositoryProvider).fetchTimeOff(clinicId);
 });
 
-/// What a booking screen may offer: see `public.available_slots`.
-typedef SlotQuery = ({String doctorId, DateTime day, String? serviceId});
+/// What a booking screen may offer: see `public.available_slots`. When
+/// moving a visit, [ignore] is that visit, so it does not block itself.
+typedef SlotQuery = ({
+  String doctorId,
+  DateTime day,
+  String? serviceId,
+  String? ignore,
+});
 
 final availableSlotsProvider =
     FutureProvider.autoDispose.family<List<DateTime>, SlotQuery>(
@@ -94,6 +100,7 @@ final availableSlotsProvider =
         doctorId: q.doctorId,
         day: DateTime(q.day.year, q.day.month, q.day.day),
         serviceId: q.serviceId,
+        ignoreAppointmentId: q.ignore,
       ),
 );
 

@@ -25,4 +25,14 @@ class SupabaseConfig {
     'SUPABASE_KEY',
     defaultValue: 'sb_publishable_5sVEfS97leh1iUGr3b5OoA_unE54G3B',
   );
+
+  /// The platform's VAPID public key, which browsers subscribe to Web Push
+  /// with. Public by design, like the key above; its private half is an Edge
+  /// Function secret (health-platform-be, supabase/functions/.env). The two
+  /// must be a pair, or every push is refused.
+  static const vapidPublicKey = String.fromEnvironment(
+    'VAPID_PUBLIC_KEY',
+    defaultValue:
+        'BDBiuAUhyEtalMV851jQgWZhWi_8azbFbRjmUwLZN76FDMV7RHOC4mZzOH4KzhtrAmyoALPDyFcOrI-UczHrclQ',
+  );
 }

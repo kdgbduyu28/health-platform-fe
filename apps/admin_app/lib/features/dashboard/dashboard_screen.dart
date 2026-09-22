@@ -58,6 +58,7 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              const NotificationsButton(),
               const AccountMenuButton(),
               const SizedBox(width: 8),
             ],

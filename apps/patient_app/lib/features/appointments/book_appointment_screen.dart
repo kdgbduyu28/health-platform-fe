@@ -419,7 +419,12 @@ class _DateTimeStep extends ConsumerWidget {
           const SizedBox(height: 12),
           AsyncView(
             value: ref.watch(availableSlotsProvider(
-                (doctorId: doctor.id, day: date, serviceId: service?.id))),
+                (
+              doctorId: doctor.id,
+              day: date,
+              serviceId: service?.id,
+              ignore: null,
+            ))),
             onRetry: () => ref.invalidate(availableSlotsProvider),
             builder: (slots) => slots.isEmpty
                 ? Text(

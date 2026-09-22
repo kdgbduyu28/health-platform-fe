@@ -1,3 +1,5 @@
+import 'money.dart';
+
 /// A bookable service from `public.services`.
 ///
 /// The catalogue is per-clinic data an admin can edit, rather than a constant
@@ -34,12 +36,6 @@ class Service {
   /// `₱1,500` — or null with no price set.
   String? get priceLabel {
     final p = price;
-    if (p == null) return null;
-    final whole = p == p.roundToDouble();
-    final digits = p.toStringAsFixed(whole ? 0 : 2);
-    final parts = digits.split('.');
-    final grouped = parts.first.replaceAllMapped(
-        RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
-    return '₱$grouped${parts.length > 1 ? '.${parts[1]}' : ''}';
+    return p == null ? null : formatPeso(p);
   }
 }

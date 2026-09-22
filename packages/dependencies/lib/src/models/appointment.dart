@@ -19,6 +19,8 @@ class Appointment {
     this.arrivedAt,
     this.startedAt,
     this.completedAt,
+    this.rescheduledFrom,
+    this.rescheduleCount = 0,
   });
 
   final String id;
@@ -51,6 +53,10 @@ class Appointment {
   final DateTime? startedAt;
   final DateTime? completedAt;
 
+  /// Where the visit was before it was last moved, and how often it has been.
+  final DateTime? rescheduledFrom;
+  final int rescheduleCount;
+
   DateTime get endsAt => dateTime.add(Duration(minutes: durationMinutes));
 
   /// Expects the chart (with its person) and the doctor embedded:
@@ -78,6 +84,8 @@ class Appointment {
       arrivedAt: _time(json['arrived_at']),
       startedAt: _time(json['started_at']),
       completedAt: _time(json['completed_at']),
+      rescheduledFrom: _time(json['rescheduled_from']),
+      rescheduleCount: json['reschedule_count'] as int? ?? 0,
     );
   }
 
@@ -97,8 +105,15 @@ class Appointment {
       arrivedAt: arrivedAt,
       startedAt: startedAt,
       completedAt: completedAt,
+      rescheduledFrom: rescheduledFrom,
+      rescheduleCount: rescheduleCount,
     );
   }
+
+  /// Can still be moved: it has not started. The database refuses the rest.
+  bool get canReschedule =>
+      status == AppointmentStatus.pending ||
+      status == AppointmentStatus.confirmed;
 
   bool get isUpcoming => dateTime.isAfter(DateTime.now());
 
