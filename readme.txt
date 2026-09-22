@@ -1,3 +1,15 @@
+Build web for all four apps:
+
+./scripts/release.sh --web
+
+(or: melos run build:web)
+
+Subset, and clean first:
+
+./scripts/release.sh --web patient doctor
+./scripts/release.sh --web --clean
+
+
 Build specific app:
 
 Patient:

@@ -8,6 +8,9 @@ packages:
   - packages/dependencies
 
 scripts:
+    build:web:
+      run: ./scripts/release.sh --web
+
     assistant:web:
       run: cd apps/assistant_app && flutter run -d chrome
 
