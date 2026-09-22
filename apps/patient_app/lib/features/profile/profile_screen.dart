@@ -105,6 +105,12 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
+                      onPressed: () => showChangePasswordDialog(context),
+                      icon: const Icon(Icons.password_outlined),
+                      label: const Text('Change password'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
                       // Signing out clears the session, which drops every RLS
                       // grant with it — the app shell then swaps the router
                       // back to the sign-in screen on its own.

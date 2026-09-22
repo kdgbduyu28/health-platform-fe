@@ -4,6 +4,7 @@ import '../models/app_role.dart';
 import '../models/clinic.dart';
 import '../models/membership.dart';
 import '../models/patient.dart';
+import '../models/staff_invite.dart';
 import 'supabase_providers.dart';
 
 /// Which of the four apps is running.
@@ -105,6 +106,43 @@ final currentClinicProvider = Provider<AsyncValue<Clinic?>>((ref) {
 final currentClinicIdProvider = Provider<String?>(
   (ref) => ref.watch(currentClinicProvider).value?.id,
 );
+
+/// The signed-in account's staff membership at the current clinic, if any.
+final currentMembershipProvider = Provider<ClinicMembership?>((ref) {
+  final clinicId = ref.watch(currentClinicIdProvider);
+  final memberships =
+      ref.watch(myMembershipsProvider).value ?? const <ClinicMembership>[];
+  for (final m in memberships) {
+    if (m.clinicId == clinicId) return m;
+  }
+  return null;
+});
+
+/// Whether the signed-in account may manage the current clinic's admins —
+/// false for a branch admin. Mirrors `private.is_full_admin`.
+final isFullAdminProvider = Provider<bool>(
+  (ref) => ref.watch(currentMembershipProvider)?.isFullAdmin ?? false,
+);
+
+/// Every staff code issued at the current clinic. Admin app only.
+final staffInvitesProvider = FutureProvider<List<StaffInvite>>((ref) async {
+  final clinicId = ref.watch(currentClinicIdProvider);
+  if (clinicId == null) return const [];
+  return ref.watch(healthRepositoryProvider).fetchStaffInvites(clinicId);
+});
+
+/// Requests at the current clinic still waiting for an admin.
+final pendingStaffRequestsProvider = Provider<List<StaffInvite>>((ref) => [
+      for (final invite
+          in ref.watch(staffInvitesProvider).value ?? const <StaffInvite>[])
+        if (invite.status == StaffInviteStatus.pending) invite,
+    ]);
+
+/// The signed-in account's own requests to join clinics as staff.
+final myStaffRequestsProvider = FutureProvider<List<StaffRequest>>((ref) {
+  ref.watch(currentUserIdProvider);
+  return ref.watch(healthRepositoryProvider).fetchMyStaffRequests();
+});
 
 /// Any clinic this user can see, by id — for labelling records (an
 /// appointment's clinic) without refetching.

@@ -54,6 +54,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                         ?.copyWith(fontWeight: FontWeight.bold)),
               ],
             ),
+            actions: const [AccountMenuButton(), SizedBox(width: 8)],
           ),
           SliverToBoxAdapter(
             child: Column(

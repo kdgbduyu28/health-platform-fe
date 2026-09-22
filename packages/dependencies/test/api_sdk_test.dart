@@ -385,4 +385,100 @@ void main() {
       expect(await canSee(c), isFalse);
     });
   });
+
+  group('staff codes', () {
+    test('StaffInvite.fromJson reads a pending request', () {
+      final i = StaffInvite.fromJson({
+        'id': 'inv-1',
+        'clinic_id': 'clinic-1',
+        'role': 'doctor',
+        'code': 'ABCD2345',
+        'status': 'pending',
+        'expires_at': '2026-09-22T00:00:00Z',
+        'label': 'Dr Reyes',
+        'redeemer_name': 'Ana Reyes',
+        'redeemer_email': 'reyes@mail.com',
+        'redeemed_at': '2026-09-16T01:00:00Z',
+      });
+      expect(i.role, AppRole.doctor);
+      expect(i.status, StaffInviteStatus.pending);
+      expect(i.applicant, 'Ana Reyes');
+      expect(i.redeemedAt, isNotNull);
+    });
+
+    test('only an OPEN code past its expiry counts as expired', () {
+      Map<String, dynamic> row(String status) => {
+            'id': 'i',
+            'clinic_id': 'c',
+            'role': 'assistant',
+            'code': 'ABCD2345',
+            'status': status,
+            'expires_at': '2026-09-01T00:00:00Z',
+          };
+      final later = DateTime.utc(2026, 9, 2);
+      expect(StaffInvite.fromJson(row('open')).isExpired(later), isTrue);
+      expect(StaffInvite.fromJson(row('pending')).isExpired(later), isFalse);
+      expect(StaffInvite.fromJson(row('open')).applicant, 'Someone');
+    });
+
+    test('StaffRequest.fromJson reads the my_staff_requests row', () {
+      final r = StaffRequest.fromJson({
+        'id': 'inv-1',
+        'clinic_name': 'D-Touch Dental Clinic',
+        'role': 'assistant',
+        'status': 'rejected',
+        'redeemed_at': '2026-09-16T01:00:00Z',
+        'decided_at': null,
+      });
+      expect(r.clinicName, 'D-Touch Dental Clinic');
+      expect(r.status, StaffInviteStatus.rejected);
+    });
+
+    test('AppRole.takesStaffCodes: doctors and assistants only', () {
+      expect(AppRole.doctor.takesStaffCodes, isTrue);
+      expect(AppRole.assistant.takesStaffCodes, isTrue);
+      expect(AppRole.admin.takesStaffCodes, isFalse);
+      expect(AppRole.patient.takesStaffCodes, isFalse);
+    });
+  });
+
+  group('branch admins', () {
+    test('a branch-locked admin is not a full admin', () {
+      final branch = ClinicMembership.fromJson({
+        'profile_id': 'u',
+        'clinic_id': 'c',
+        'role': 'admin',
+        'branch_locked': true,
+      });
+      expect(branch.isFullAdmin, isFalse);
+      expect(branch.roleLabel, 'Branch admin');
+
+      // A row selected without the column reads as a full admin.
+      final full = ClinicMembership.fromJson(
+          {'profile_id': 'u', 'clinic_id': 'c', 'role': 'admin'});
+      expect(full.isFullAdmin, isTrue);
+      expect(full.roleLabel, 'Administrator');
+    });
+
+    test('isFullAdminProvider follows the current clinic', () async {
+      final a = clinic('a'), b = clinic('b');
+      final c = appContainer(
+        app: AppRole.admin,
+        visible: [a, b],
+        memberships: [
+          staffAt('a', AppRole.admin),
+          const ClinicMembership(
+            profileId: 'u1',
+            clinicId: 'b',
+            role: AppRole.admin,
+            branchLocked: true,
+          ),
+        ],
+      );
+      await c.read(myClinicsProvider.future);
+      expect(c.read(isFullAdminProvider), isTrue);
+      c.read(selectedClinicIdProvider.notifier).select('b');
+      expect(c.read(isFullAdminProvider), isFalse);
+    });
+  });
 }

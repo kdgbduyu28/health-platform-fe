@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:api_sdk/api_sdk.dart';
 import '../features/dashboard/dashboard_screen.dart';
@@ -46,37 +47,45 @@ final adminRouter = GoRouter(
   ],
 );
 
-class _NavScaffold extends StatelessWidget {
+class _NavScaffold extends ConsumerWidget {
   const _NavScaffold({required this.shell});
   final StatefulNavigationShell shell;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // New staff waiting for approval surface on the Clinic tab from anywhere.
+    final pending = ref.watch(pendingStaffRequestsProvider).length;
+    Widget clinicIcon(IconData icon) => Badge(
+          isLabelVisible: pending > 0,
+          label: Text('$pending'),
+          child: Icon(icon),
+        );
+
     return Scaffold(
       body: shell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: shell.currentIndex,
         onDestinationSelected: (i) =>
             shell.goBranch(i, initialLocation: i == shell.currentIndex),
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard),
             label: 'Dashboard',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month),
             label: 'Schedule',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.group_outlined),
             selectedIcon: Icon(Icons.group),
             label: 'Patients',
           ),
           NavigationDestination(
-            icon: Icon(Icons.storefront_outlined),
-            selectedIcon: Icon(Icons.storefront),
+            icon: clinicIcon(Icons.storefront_outlined),
+            selectedIcon: clinicIcon(Icons.storefront),
             label: 'Clinic',
           ),
         ],

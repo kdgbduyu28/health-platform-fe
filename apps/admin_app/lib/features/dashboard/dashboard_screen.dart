@@ -59,6 +59,8 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              const AccountMenuButton(),
+              const SizedBox(width: 8),
             ],
           ),
           SliverPadding(

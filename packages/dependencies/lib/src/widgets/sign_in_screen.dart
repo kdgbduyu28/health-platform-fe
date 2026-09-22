@@ -5,6 +5,7 @@ import '../providers/clinic_provider.dart';
 import '../providers/supabase_providers.dart';
 import '../theme/brand.dart';
 import 'async_view.dart';
+import 'password_reset_screen.dart';
 
 /// Shared sign-in for all four apps.
 ///
@@ -68,12 +69,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           _fullName.text.trim(),
         );
         if (mounted) {
-          final isStaffApp = ref.read(appRoleProvider).isStaff;
+          final app = ref.read(appRoleProvider);
+          final email = _email.text.trim();
+          final nextStep = app.takesStaffCodes
+              ? ' Then sign in and enter the staff code your clinic gave you.'
+              : app.isStaff
+                  ? ' Then ask your clinic administrator to add $email.'
+                  : '';
           setState(() => _notice =
               'Account created. If email confirmation is on, check your inbox '
-              'before signing in.'
-              '${isStaffApp ? ' Then ask your clinic administrator to add '
-                  '${_email.text.trim()}.' : ''}');
+              'before signing in.$nextStep');
         }
       } else {
         await repo.signIn(_email.text.trim(), _password.text);
@@ -87,7 +92,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isStaffApp = ref.watch(appRoleProvider).isStaff;
+    final app = ref.watch(appRoleProvider);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
@@ -144,6 +149,22 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           ? 'At least 6 characters'
                           : null,
                     ),
+                    if (!_isSignUp)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => PasswordResetScreen(
+                                        initialEmail: _email.text.trim(),
+                                      ),
+                                    ),
+                                  ),
+                          child: const Text('Forgot password?'),
+                        ),
+                      ),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       _Banner(text: _error!, color: cs.error, icon: Icons.error_outline),
@@ -180,11 +201,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           ? 'I already have an account'
                           : 'New here? Create an account'),
                     ),
-                    if (isStaffApp) ...[
+                    if (app.isStaff) ...[
                       const SizedBox(height: 8),
                       Text(
-                        'New staff: create your account, then ask your '
-                        'clinic administrator to add you.',
+                        app.takesStaffCodes
+                            ? 'New staff: create your account, sign in, then '
+                                'enter the staff code from your clinic\'s admin.'
+                            : 'New staff: create your account, then ask your '
+                                'clinic administrator to add you.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,

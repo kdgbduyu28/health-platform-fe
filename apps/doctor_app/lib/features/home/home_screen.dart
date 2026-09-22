@@ -93,6 +93,8 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                   ],
                 ),
               ),
+              const AccountMenuButton(),
+              const SizedBox(width: 8),
             ],
             bottom: TabBar(
               controller: _tabs,

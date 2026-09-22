@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthException, PostgrestException;
 
 /// Renders an [AsyncValue] with consistent loading and error states.
 ///
@@ -138,6 +139,14 @@ String describeError(Object error) {
   // valid", "a clinic must keep at least one admin". Plain RAISE EXCEPTION
   // arrives as SQLSTATE P0001 — show its message, not the exception wrapper.
   if (error is PostgrestException && error.code == 'P0001') {
+    return error.message;
+  }
+  // Supabase Auth's messages are already sentences ("Invalid login
+  // credentials"); the exception's toString wraps them in a status code.
+  if (error is AuthException) {
+    if (error.message.contains('expired or is invalid')) {
+      return 'That code is wrong or has expired. Request a new one.';
+    }
     return error.message;
   }
   final text = error.toString();

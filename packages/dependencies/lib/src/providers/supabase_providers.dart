@@ -38,6 +38,24 @@ final isSignedInProvider = Provider<bool>(
   (ref) => ref.watch(currentUserIdProvider) != null,
 );
 
+/// True while a password reset has verified its emailed code but not yet saved
+/// the new password.
+///
+/// Verifying the code signs the user in, and the shell would normally swap the
+/// sign-in screen for the app at that moment — before they have chosen a new
+/// password. While this is set, the shell keeps the sign-in screens up.
+class PasswordResetInProgress extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void start() => state = true;
+
+  void finish() => state = false;
+}
+
+final passwordResetInProgressProvider =
+    NotifierProvider<PasswordResetInProgress, bool>(PasswordResetInProgress.new);
+
 /// The signed-in user's profile row, carrying the role that decides which
 /// parts of each app are usable.
 final myProfileProvider = FutureProvider<Profile?>((ref) {

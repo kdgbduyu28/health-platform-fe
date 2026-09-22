@@ -9,6 +9,7 @@ import '../theme/clinic_theme.dart';
 import '../widgets/async_view.dart';
 import '../widgets/join_clinic_screen.dart';
 import '../widgets/sign_in_screen.dart';
+import '../widgets/staff_code_screen.dart';
 
 /// The outer shell shared by all four apps.
 ///
@@ -32,7 +33,13 @@ class ClinicAppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(isSignedInProvider)) {
+    // Both watched up front: `||` would skip the second watch when signed out.
+    // A password reset signs the user in before the new password is saved, so
+    // the sign-in screens — and the reset screen pushed on them — stay up
+    // until it is.
+    final signedIn = ref.watch(isSignedInProvider);
+    final resettingPassword = ref.watch(passwordResetInProgressProvider);
+    if (!signedIn || resettingPassword) {
       return MaterialApp(
         title: appName,
         theme: buildClinicTheme(null),
@@ -83,9 +90,10 @@ void _refreshAccess(WidgetRef ref) {
 /// Signed in, but attached to no clinic this app can be used at.
 ///
 /// For a patient that is the normal state right after signing up, and the next
-/// step is theirs: enter a clinic's code. For staff it is not something they
-/// can fix themselves — access is granted by a clinic admin — so the screen
-/// says exactly what to ask for.
+/// step is theirs: enter a clinic's code. A doctor or assistant enters the
+/// single-use staff code their admin gave them and waits for approval. An admin
+/// cannot fix it themselves — a full admin adds them — so the screen says
+/// exactly what to ask for.
 class _NoClinicYet extends ConsumerWidget {
   const _NoClinicYet();
 
@@ -93,6 +101,7 @@ class _NoClinicYet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final app = ref.watch(appRoleProvider);
     if (app == AppRole.patient) return const JoinClinicScreen();
+    if (app.takesStaffCodes) return const StaffCodeScreen();
 
     final email = ref.watch(currentUserProvider)?.email ?? 'this account';
     final theme = Theme.of(context);

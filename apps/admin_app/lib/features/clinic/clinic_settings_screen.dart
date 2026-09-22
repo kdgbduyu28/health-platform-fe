@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:api_sdk/api_sdk.dart';
 import '../../widgets/clinic_page_title.dart';
+import 'staff_access_section.dart';
 
 /// The clinic's own settings, run by its admins: how it presents itself, how
 /// patients get in, and who works there.
@@ -18,7 +19,10 @@ class ClinicSettingsScreen extends ConsumerWidget {
     final clinic = ref.watch(currentClinicProvider).value;
 
     return Scaffold(
-      appBar: AppBar(title: const ClinicPageTitle('Clinic settings')),
+      appBar: AppBar(
+        title: const ClinicPageTitle('Clinic settings'),
+        actions: const [AccountMenuButton(), SizedBox(width: 8)],
+      ),
       body: clinic == null
           ? const SizedBox.shrink()
           : ListView(
@@ -28,6 +32,8 @@ class ClinicSettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
                 const _SectionTitle('Patient join code'),
                 _JoinCodeCard(clinic: clinic),
+                const SizedBox(height: 24),
+                const StaffAccessSection(),
                 const SizedBox(height: 24),
                 const _StaffSection(),
               ],
@@ -484,13 +490,18 @@ class _StaffSection extends ConsumerWidget {
 
   Future<void> _invite(BuildContext context, WidgetRef ref,
       {ClinicMembership? existing}) async {
-    final result = await showDialog<(String, AppRole)>(
+    final result = await showDialog<(String, AppRole, bool)>(
       context: context,
-      builder: (_) => _InviteDialog(existing: existing),
+      builder: (_) => _InviteDialog(
+        existing: existing,
+        canGrantAdmin: ref.read(isFullAdminProvider),
+      ),
     );
     if (result == null || !context.mounted) return;
 
-    final (email, role) = result;
+    final (email, role, branchLocked) = result;
+    final roleName =
+        branchLocked ? 'branch admin' : role.displayName.toLowerCase();
     final clinicId = ref.read(currentClinicIdProvider);
     if (clinicId == null) return;
 
@@ -498,15 +509,20 @@ class _StaffSection extends ConsumerWidget {
     try {
       await ref
           .read(healthRepositoryProvider)
-          .inviteStaff(clinicId: clinicId, email: email, role: role);
+          .inviteStaff(
+            clinicId: clinicId,
+            email: email,
+            role: role,
+            branchLocked: branchLocked,
+          );
       ref.invalidate(staffProvider);
       // The admin may have just changed their OWN role.
       ref.invalidate(myMembershipsProvider);
       _snack(
         messenger,
         existing == null
-            ? '$email added as ${role.displayName.toLowerCase()}'
-            : 'Role updated to ${role.displayName.toLowerCase()}',
+            ? '$email added as $roleName'
+            : 'Role updated to $roleName',
       );
     } catch (e) {
       _snack(messenger, describeError(e));
@@ -545,6 +561,8 @@ class _StaffSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final staffAsync = ref.watch(staffProvider);
     final me = ref.watch(currentUserIdProvider);
+    // A branch admin manages doctors and assistants, never admins.
+    final isFullAdmin = ref.watch(isFullAdminProvider);
     final cs = Theme.of(context).colorScheme;
 
     return Column(
@@ -566,7 +584,9 @@ class _StaffSection extends ConsumerWidget {
               for (final member in staff)
                 Card(
                   child: ListTile(
-                    onTap: () => _invite(context, ref, existing: member),
+                    onTap: isFullAdmin || member.role != AppRole.admin
+                        ? () => _invite(context, ref, existing: member)
+                        : null,
                     leading: CircleAvatar(
                       backgroundColor: cs.primaryContainer,
                       child: Text(
@@ -579,12 +599,14 @@ class _StaffSection extends ConsumerWidget {
                     ),
                     title: Text(member.fullName ?? member.email ?? 'Unknown'),
                     subtitle: Text([
-                      member.role.displayName,
+                      member.roleLabel,
                       if (member.email != null) member.email!,
                     ].join(' · ')),
                     trailing: member.profileId == me
                         ? Text('You',
                             style: TextStyle(color: cs.onSurfaceVariant))
+                        : !isFullAdmin && member.role == AppRole.admin
+                        ? null
                         : IconButton(
                             tooltip: 'Remove from clinic',
                             icon: const Icon(Icons.person_remove_outlined),
@@ -607,12 +629,15 @@ class _StaffSection extends ConsumerWidget {
   }
 }
 
-/// Adds someone, or changes an existing member's role. Returns (email, role),
-/// or null if cancelled.
+/// Adds someone, or changes an existing member's role. Returns
+/// (email, role, branchLocked), or null if cancelled.
 class _InviteDialog extends StatefulWidget {
-  const _InviteDialog({this.existing});
+  const _InviteDialog({this.existing, required this.canGrantAdmin});
 
   final ClinicMembership? existing;
+
+  /// False for a branch admin, who may not hand out either kind of admin.
+  final bool canGrantAdmin;
 
   @override
   State<_InviteDialog> createState() => _InviteDialogState();
@@ -623,6 +648,7 @@ class _InviteDialogState extends State<_InviteDialog> {
   late final _email =
       TextEditingController(text: widget.existing?.email ?? '');
   late AppRole _role = widget.existing?.role ?? AppRole.assistant;
+  late bool _branchLocked = widget.existing?.branchLocked ?? false;
 
   @override
   void dispose() {
@@ -656,20 +682,37 @@ class _InviteDialogState extends State<_InviteDialog> {
             ),
             const SizedBox(height: 16),
             SegmentedButton<AppRole>(
-              segments: const [
-                ButtonSegment(value: AppRole.doctor, label: Text('Doctor')),
-                ButtonSegment(
+              segments: [
+                const ButtonSegment(
+                    value: AppRole.doctor, label: Text('Doctor')),
+                const ButtonSegment(
                     value: AppRole.assistant, label: Text('Assistant')),
-                ButtonSegment(value: AppRole.admin, label: Text('Admin')),
+                if (widget.canGrantAdmin)
+                  const ButtonSegment(
+                      value: AppRole.admin, label: Text('Admin')),
               ],
               selected: {_role},
               onSelectionChanged: (s) => setState(() => _role = s.first),
             ),
+            if (_role == AppRole.admin) ...[
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _branchLocked,
+                onChanged: (v) => setState(() => _branchLocked = v),
+                title: const Text('Branch admin'),
+                subtitle: const Text(
+                  'Runs this clinic only. Cannot add or change admins, and '
+                  'cannot be an admin at any other clinic.',
+                ),
+              ),
+            ],
             if (!isEdit) ...[
               const SizedBox(height: 16),
               Text(
                 'They need an account first: ask them to create one in any '
-                'of the apps with this email, then add them here.',
+                'of the apps with this email, then add them here. Doctors '
+                'and assistants can also join with a staff code.',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ],
@@ -685,8 +728,11 @@ class _InviteDialogState extends State<_InviteDialog> {
           style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
-            Navigator.pop<(String, AppRole)>(
-                context, (_email.text.trim(), _role));
+            Navigator.pop<(String, AppRole, bool)>(context, (
+              _email.text.trim(),
+              _role,
+              _role == AppRole.admin && _branchLocked,
+            ));
           },
           child: Text(isEdit ? 'Save' : 'Add'),
         ),

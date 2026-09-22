@@ -16,6 +16,10 @@ enum AppRole {
 
   bool get isStaff => this != AppRole.patient;
 
+  /// Whether new staff join this app with a single-use code from an admin.
+  /// Admins are added by email instead, by a full admin.
+  bool get takesStaffCodes => this == AppRole.doctor || this == AppRole.assistant;
+
   /// Whether a membership with this role may read and write clinical notes.
   /// Mirrors `private.is_clinician` in the database.
   bool get seesClinicalNotes => this == AppRole.doctor || this == AppRole.admin;

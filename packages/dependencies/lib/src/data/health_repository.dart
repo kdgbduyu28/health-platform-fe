@@ -10,6 +10,7 @@ import '../models/membership.dart';
 import '../models/patient.dart';
 import '../models/profile.dart';
 import '../models/service.dart';
+import '../models/staff_invite.dart';
 
 /// Every Supabase call the apps make lives here.
 ///
@@ -62,7 +63,7 @@ class HealthRepository {
     if (uid == null) return const [];
     final rows = await _db
         .from('clinic_memberships')
-        .select('profile_id, clinic_id, role')
+        .select('profile_id, clinic_id, role, branch_locked')
         .eq('profile_id', uid);
     return rows.map((r) => ClinicMembership.fromJson(r)).toList();
   }
@@ -188,7 +189,8 @@ class HealthRepository {
   Future<List<ClinicMembership>> fetchStaff(String clinicId) async {
     final rows = await _db
         .from('clinic_memberships')
-        .select('profile_id, clinic_id, role, profile:profiles(full_name, email)')
+        .select(
+            'profile_id, clinic_id, role, branch_locked, profile:profiles(full_name, email)')
         .eq('clinic_id', clinicId);
     return rows.map((r) => ClinicMembership.fromJson(r)).toList()
       ..sort((a, b) => (a.fullName ?? '').compareTo(b.fullName ?? ''));
@@ -307,16 +309,19 @@ class HealthRepository {
   }
 
   /// Grants [role] at [clinicId] to the account registered under [email].
-  /// Admin-only; the account must already exist.
+  /// Admin-only; the account must already exist. [branchLocked] makes an
+  /// admin a branch admin, and only a full admin may grant either kind.
   Future<void> inviteStaff({
     required String clinicId,
     required String email,
     required AppRole role,
+    bool branchLocked = false,
   }) =>
       _db.rpc('invite_staff', params: {
         'p_clinic_id': clinicId,
         'p_email': email,
         'p_role': role.wire,
+        'p_branch_locked': branchLocked,
       });
 
   Future<void> removeStaff({
@@ -341,10 +346,97 @@ class HealthRepository {
     return code as String;
   }
 
+  // ── Staff codes ───────────────────────────────────────────────────────────
+
+  /// Every staff code issued at [clinicId] and what became of it, newest
+  /// first. Readable by the clinic's admins, branch admins included.
+  Future<List<StaffInvite>> fetchStaffInvites(String clinicId) async {
+    final rows = await _db
+        .from('staff_invites')
+        .select()
+        .eq('clinic_id', clinicId)
+        .order('created_at', ascending: false);
+    return rows.map((r) => StaffInvite.fromJson(r)).toList();
+  }
+
+  /// Issues a single-use code for one doctor or assistant.
+  Future<StaffInvite> createStaffInvite({
+    required String clinicId,
+    required AppRole role,
+    String? label,
+  }) async {
+    final row = await _db.rpc('create_staff_invite', params: {
+      'p_clinic_id': clinicId,
+      'p_role': role.wire,
+      'p_label': label,
+    });
+    return StaffInvite.fromJson(row as Map<String, dynamic>);
+  }
+
+  Future<void> revokeStaffInvite(String inviteId) =>
+      _db.rpc('revoke_staff_invite', params: {'p_invite_id': inviteId});
+
+  /// Approves or rejects a request. Approving a doctor needs either an
+  /// unlinked roster entry at the clinic ([doctorId]) or a [specialty] to
+  /// create one with.
+  Future<void> decideStaffRequest({
+    required String inviteId,
+    required bool approve,
+    String? doctorId,
+    String? specialty,
+  }) =>
+      _db.rpc('decide_staff_request', params: {
+        'p_invite_id': inviteId,
+        'p_approve': approve,
+        'p_doctor_id': doctorId,
+        'p_specialty': specialty,
+      });
+
+  /// Files a request to join a clinic as [app] — the app the code was typed
+  /// into. Grants nothing until an admin approves.
+  Future<void> redeemStaffInvite(String code, AppRole app) =>
+      _db.rpc('redeem_staff_invite', params: {
+        'p_code': code,
+        'p_app_role': app.wire,
+      });
+
+  /// The signed-in account's own requests, newest first.
+  Future<List<StaffRequest>> fetchMyStaffRequests() async {
+    if (_uid == null) return const [];
+    final rows = await _db.rpc('my_staff_requests') as List<dynamic>;
+    return rows
+        .map((r) => StaffRequest.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
   // ── Auth ──────────────────────────────────────────────────────────────────
 
   Future<void> signIn(String email, String password) =>
       _db.auth.signInWithPassword(email: email, password: password);
+
+  /// Emails a one-time recovery code. Supabase answers the same whether or not
+  /// the address has an account, so this reveals nothing about who signed up.
+  ///
+  /// The email must show `{{ .Token }}`: the default template only has a link,
+  /// and this app asks for the code instead (see the backend README).
+  Future<void> sendPasswordResetCode(String email) =>
+      _db.auth.resetPasswordForEmail(email.trim());
+
+  /// Exchanges the emailed code for a session, then sets the new password.
+  ///
+  /// Verifying signs the user in. That is why these are two steps the caller
+  /// can drive separately: if the password update fails after a good code, a
+  /// retry must not spend the code a second time.
+  Future<void> verifyPasswordResetCode(String email, String code) =>
+      _db.auth.verifyOTP(
+        email: email.trim(),
+        token: code.trim(),
+        type: OtpType.recovery,
+      );
+
+  /// Sets a new password for the signed-in account.
+  Future<void> changePassword(String newPassword) =>
+      _db.auth.updateUser(UserAttributes(password: newPassword));
 
   /// Creates an account and nothing else. Access is granted separately: a
   /// patient joins a clinic with its code, staff are added by a clinic admin.
