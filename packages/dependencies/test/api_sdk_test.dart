@@ -287,7 +287,7 @@ void main() {
     });
   });
 
-  group('currentClinicProvider', () {
+  group('currentClinicProvider is the clinic in the URL', () {
     final a = clinic('a'), b = clinic('b');
 
     ProviderContainer twoClinicAdmin() => appContainer(
@@ -296,20 +296,26 @@ void main() {
           memberships: [staffAt('a', AppRole.admin), staffAt('b', AppRole.admin)],
         );
 
-    test('defaults to the first clinic', () async {
+    void openClinic(ProviderContainer c, String id) =>
+        c.read(routeClinicSlugProvider.notifier).set('clinic-$id');
+
+    test('is null outside any clinic', () async {
       final container = twoClinicAdmin();
       await container.read(myClinicsProvider.future);
-      expect(container.read(currentClinicIdProvider), 'a');
+      expect(container.read(currentClinicIdProvider), isNull);
     });
 
-    test('follows an explicit switch', () async {
+    test('follows the slug', () async {
       final container = twoClinicAdmin();
       await container.read(myClinicsProvider.future);
-      container.read(selectedClinicIdProvider.notifier).select('b');
+      openClinic(container, 'a');
+      expect(container.read(currentClinicIdProvider), 'a');
+      openClinic(container, 'b');
       expect(container.read(currentClinicIdProvider), 'b');
     });
 
-    test('never lands on a clinic the app does not offer', () async {
+    test('is null at a clinic the app does not offer, never another one',
+        () async {
       final container = appContainer(
         app: AppRole.admin,
         visible: [a, b],
@@ -317,23 +323,35 @@ void main() {
       );
       await container.read(myClinicsProvider.future);
       // B is visible to this account, but not as an admin.
-      container.read(selectedClinicIdProvider.notifier).select('b');
-      expect(container.read(currentClinicIdProvider), 'a');
+      openClinic(container, 'b');
+      expect(container.read(currentClinicIdProvider), isNull);
     });
 
     test('is null when the account belongs to no clinic', () async {
       final container = appContainer(app: AppRole.patient, visible: [a]);
       await container.read(myClinicsProvider.future);
+      openClinic(container, 'a');
       expect(container.read(currentClinicProvider).value, isNull);
+    });
+
+    test('signed out, nothing is fetched and nothing is current', () async {
+      final container = ProviderContainer(overrides: [
+        appRoleProvider.overrideWithValue(AppRole.patient),
+        currentUserIdProvider.overrideWithValue(null),
+        // Would throw if asked: signed out must not reach the network.
+        visibleClinicsProvider.overrideWith((ref) => throw StateError('fetched')),
+      ]);
+      addTearDown(container.dispose);
+      expect(await container.read(myClinicsProvider.future), isEmpty);
     });
   });
 
   group('canSeeClinicalNotesProvider follows the role at the current clinic', () {
     final a = clinic('a'), b = clinic('b');
 
-    Future<bool> canSee(ProviderContainer c, {String? select}) async {
+    Future<bool> canSee(ProviderContainer c, {String at = 'a'}) async {
       await c.read(myClinicsProvider.future);
-      if (select != null) c.read(selectedClinicIdProvider.notifier).select(select);
+      c.read(routeClinicSlugProvider.notifier).set('clinic-$at');
       return c.read(canSeeClinicalNotesProvider.future);
     }
 
@@ -371,7 +389,7 @@ void main() {
         memberships: [staffAt('a', AppRole.assistant), staffAt('b', AppRole.admin)],
       );
       expect(await canSee(c), isFalse);
-      expect(await canSee(c, select: 'b'), isTrue);
+      expect(await canSee(c, at: 'b'), isTrue);
     });
 
     test('never in the patient app, even for an account that is also staff',
@@ -476,9 +494,58 @@ void main() {
         ],
       );
       await c.read(myClinicsProvider.future);
+      c.read(routeClinicSlugProvider.notifier).set('clinic-a');
       expect(c.read(isFullAdminProvider), isTrue);
-      c.read(selectedClinicIdProvider.notifier).select('b');
+      c.read(routeClinicSlugProvider.notifier).set('clinic-b');
       expect(c.read(isFullAdminProvider), isFalse);
+    });
+  });
+
+  group('public clinic pages', () {
+    test('ClinicPage.fromJson reads the clinic, services and doctors', () {
+      final page = ClinicPage.fromJson({
+        ...clinicJson('a'),
+        'services': [
+          {'id': 's1', 'clinic_id': 'a', 'name': 'Cleaning', 'duration_minutes': 45},
+        ],
+        'doctors': [
+          {
+            'id': 'd1',
+            'clinic_id': 'a',
+            'full_name': 'Ana Santos',
+            'specialty': 'Orthodontics',
+            'available_weekdays': [1, 2, 3, 4, 5],
+          },
+        ],
+      });
+      expect(page.clinic.slug, 'clinic-a');
+      expect(page.clinic.joinCode, isNull);
+      expect(page.services.single.durationMinutes, 45);
+      expect(page.doctors.single.availableWeekdays, [1, 2, 3, 4, 5]);
+      expect(page.doctors.single.availableTimeSlots, isEmpty);
+    });
+
+    test('a page without lists is still a page', () {
+      final page = ClinicPage.fromJson(clinicJson('a'));
+      expect(page.services, isEmpty);
+      expect(page.doctors, isEmpty);
+    });
+
+    test('formatWeekdays reads the way a clinic would write it', () {
+      expect(formatWeekdays([1, 2, 3, 4, 5]), 'Mon–Fri');
+      expect(formatWeekdays([1, 3, 5]), 'Mon, Wed, Fri');
+      expect(formatWeekdays([1, 2, 4, 5, 6]), 'Mon, Tue, Thu–Sat');
+      expect(formatWeekdays([6, 7]), 'Sat, Sun');
+      expect(formatWeekdays([1, 2, 3, 4, 5, 6, 7]), 'Every day');
+      expect(formatWeekdays([5, 1, 3, 3, 9]), 'Mon, Wed, Fri');
+      expect(formatWeekdays([]), '');
+    });
+
+    test('each app lands on its own home tab', () {
+      expect(clinicHome('dtouchdental', AppRole.patient), '/dtouchdental/home');
+      expect(clinicHome('dtouchdental', AppRole.doctor), '/dtouchdental/schedule');
+      expect(clinicHome('dtouchdental', AppRole.assistant), '/dtouchdental/check-in');
+      expect(clinicHome('dtouchdental', AppRole.admin), '/dtouchdental/dashboard');
     });
   });
 }

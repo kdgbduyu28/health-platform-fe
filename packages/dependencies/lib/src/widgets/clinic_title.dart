@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../app/clinic_router.dart';
 import '../models/clinic.dart';
 import '../providers/clinic_provider.dart';
 import '../theme/brand.dart';
@@ -59,9 +61,12 @@ class ClinicTitle extends ConsumerWidget {
 }
 
 /// A sheet listing every clinic this user can use the current app at.
+/// Picking one opens it at its own URL.
 Future<void> showClinicSwitcher(BuildContext context, WidgetRef ref) {
   final clinics = ref.read(myClinicsProvider).value ?? const <Clinic>[];
   final currentId = ref.read(currentClinicIdProvider);
+  final app = ref.read(appRoleProvider);
+  final router = GoRouter.of(context);
 
   return showModalBottomSheet<void>(
     context: context,
@@ -92,8 +97,8 @@ Future<void> showClinicSwitcher(BuildContext context, WidgetRef ref) {
                       color: Theme.of(sheetContext).colorScheme.primary)
                   : null,
               onTap: () {
-                ref.read(selectedClinicIdProvider.notifier).select(clinic.id);
                 Navigator.pop(sheetContext);
+                router.go(clinicHome(clinic.slug, app));
               },
             ),
         ],

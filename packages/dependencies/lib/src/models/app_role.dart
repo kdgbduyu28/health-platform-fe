@@ -24,6 +24,16 @@ enum AppRole {
   /// Mirrors `private.is_clinician` in the database.
   bool get seesClinicalNotes => this == AppRole.doctor || this == AppRole.admin;
 
+  /// Where this app lands inside a clinic, under `/:clinic`. The bare
+  /// `/:clinic` is the public page in the patient app and redirects here in
+  /// the others.
+  String get homeSubpath => switch (this) {
+        AppRole.patient => '/home',
+        AppRole.doctor => '/schedule',
+        AppRole.assistant => '/check-in',
+        AppRole.admin => '/dashboard',
+      };
+
   String get displayName => switch (this) {
         AppRole.patient => 'Patient',
         AppRole.doctor => 'Doctor',

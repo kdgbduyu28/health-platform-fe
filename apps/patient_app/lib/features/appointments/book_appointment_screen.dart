@@ -152,7 +152,7 @@ class _BookAppointmentScreenState
         content: Text('Appointment requested. The clinic will confirm it.'),
         behavior: SnackBarBehavior.floating,
       ));
-      context.go('/appointments');
+      context.goInClinic('/appointments');
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text(describeError(e)),

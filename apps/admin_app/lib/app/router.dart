@@ -7,44 +7,66 @@ import '../features/schedule/schedule_screen.dart';
 import '../features/appointments/appointment_detail_screen.dart';
 import '../features/clinic/clinic_settings_screen.dart';
 
-final adminRouter = GoRouter(
-  initialLocation: '/',
-  routes: [
-    GoRoute(
-      path: '/appointments/:id',
-      builder: (context, state) =>
-          AdminAppointmentDetailScreen(appointmentId: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/patients/:id',
-      builder: (context, state) => PatientHistoryScreen(
-        patientId: state.pathParameters['id']!,
-        onOpenAppointment: (a) => context.push('/appointments/${a.id}'),
+/// /:clinic/dashboard           Dashboard tab (home)
+/// /:clinic/schedule            Schedule tab
+/// /:clinic/patients            Patients tab
+/// /:clinic/patients/:id
+/// /:clinic/appointments/:id
+/// /:clinic/settings            Clinic tab
+///
+/// A branch admin is held to their one branch by the router's redirect; a
+/// full admin of several switches between them from the title.
+final adminRouterProvider = Provider<GoRouter>(
+  (ref) => createClinicRouter(
+    ref,
+    appName: 'Admin',
+    routes: [
+      GoRoute(
+        path: 'appointments/:id',
+        builder: (context, state) => AdminAppointmentDetailScreen(
+            appointmentId: state.pathParameters['id']!),
       ),
-    ),
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, shell) => _NavScaffold(shell: shell),
-      branches: [
-        StatefulShellBranch(routes: [
-          GoRoute(path: '/', builder: (_, __) => const DashboardScreen()),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(path: '/schedule', builder: (_, __) => const ScheduleScreen()),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/patients',
-            builder: (context, _) => PatientDirectoryScreen(
-              onOpenPatient: (p) => context.push('/patients/${p.id}'),
+      GoRoute(
+        path: 'patients/:id',
+        builder: (context, state) => PatientHistoryScreen(
+          patientId: state.pathParameters['id']!,
+          onOpenAppointment: (a) =>
+              context.pushInClinic('/appointments/${a.id}'),
+        ),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, shell) => _NavScaffold(shell: shell),
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: 'dashboard',
+              builder: (_, __) => const DashboardScreen(),
             ),
-          ),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(path: '/clinic', builder: (_, __) => const ClinicSettingsScreen()),
-        ]),
-      ],
-    ),
-  ],
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: 'schedule',
+              builder: (_, __) => const ScheduleScreen(),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: 'patients',
+              builder: (context, _) => PatientDirectoryScreen(
+                onOpenPatient: (p) => context.pushInClinic('/patients/${p.id}'),
+              ),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: 'settings',
+              builder: (_, __) => const ClinicSettingsScreen(),
+            ),
+          ]),
+        ],
+      ),
+    ],
+  ),
 );
 
 class _NavScaffold extends ConsumerWidget {

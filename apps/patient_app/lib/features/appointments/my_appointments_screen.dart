@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:api_sdk/api_sdk.dart';
 
 class MyAppointmentsScreen extends ConsumerStatefulWidget {
@@ -55,7 +54,7 @@ class _MyAppointmentsScreenState
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/appointments/book'),
+        onPressed: () => context.pushInClinic('/book'),
         icon: const Icon(Icons.add),
         label: const Text('Book'),
       ),
@@ -125,7 +124,7 @@ class _AppointmentList extends StatelessWidget {
         final a = appointments[i];
         return AppointmentCard(
           appointment: a,
-          onTap: () => context.push('/appointments/${a.id}'),
+          onTap: () => context.pushInClinic('/appointments/${a.id}'),
         );
       },
     );

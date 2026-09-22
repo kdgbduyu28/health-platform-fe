@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
 
@@ -73,14 +72,14 @@ class HomeScreen extends ConsumerWidget {
                     _NextAppointmentCard(
                       appointment: upcoming.first,
                       onTap: () =>
-                          context.push('/appointments/${upcoming.first.id}'),
+                          context.pushInClinic('/appointments/${upcoming.first.id}'),
                     )
                   else
                     _EmptyCard(
                         icon: clinic?.icon ?? Icons.local_hospital_outlined),
                   const SizedBox(height: 16),
                   FilledButton.icon(
-                    onPressed: () => context.push('/appointments/book'),
+                    onPressed: () => context.pushInClinic('/book'),
                     icon: const Icon(Icons.add),
                     label: const Text('Book Appointment'),
                   ),
@@ -98,7 +97,7 @@ class HomeScreen extends ConsumerWidget {
                             child: AppointmentCard(
                               appointment: a,
                               onTap: () =>
-                                  context.push('/appointments/${a.id}'),
+                                  context.pushInClinic('/appointments/${a.id}'),
                             ),
                           ),
                         ),

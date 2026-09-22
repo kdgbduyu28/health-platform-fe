@@ -31,7 +31,7 @@ class DoctorAppointmentDetailScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final notifier = ref.read(appointmentsProvider.notifier);
     final patient = appointment.patient;
-    void openHistory() => context.push('/patients/${patient.id}');
+    void openHistory() => context.pushInClinic('/patients/${patient.id}');
 
     return Scaffold(
       appBar: AppBar(
@@ -134,7 +134,7 @@ class DoctorAppointmentDetailScreen extends ConsumerWidget {
           PreviousVisitsSection(
             appointment: appointment,
             onOpenHistory: openHistory,
-            onOpenAppointment: (a) => context.push('/appointments/${a.id}'),
+            onOpenAppointment: (a) => context.pushInClinic('/appointments/${a.id}'),
           ),
           VisitNoteSection(appointment: appointment),
           PatientNoteSection(appointment: appointment),

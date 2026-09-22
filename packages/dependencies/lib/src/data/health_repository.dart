@@ -4,6 +4,7 @@ import '../models/app_role.dart';
 import '../models/appointment.dart';
 import '../models/appointment_status.dart';
 import '../models/clinic.dart';
+import '../models/clinic_page.dart';
 import '../models/clinical_note.dart';
 import '../models/doctor.dart';
 import '../models/membership.dart';
@@ -47,6 +48,15 @@ class HealthRepository {
   Future<List<Clinic>> fetchClinics() async {
     final rows = await _db.from('clinics').select(_clinicSelect).order('name');
     return rows.map((r) => Clinic.fromJson(r)).toList();
+  }
+
+  /// The public page of the active clinic at [slug], or null if there is none.
+  /// Works signed out: it is the only thing `anon` may read.
+  Future<ClinicPage?> fetchClinicPage(String slug) async {
+    final row = await _db.rpc('clinic_by_slug', params: {'p_slug': slug});
+    return row == null
+        ? null
+        : ClinicPage.fromJson(row as Map<String, dynamic>);
   }
 
   Future<Profile?> fetchMyProfile() async {

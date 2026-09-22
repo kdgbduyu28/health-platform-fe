@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/app_role.dart';
 import '../models/clinic.dart';
+import '../models/clinic_page.dart';
 import '../models/membership.dart';
 import '../models/patient.dart';
 import '../models/staff_invite.dart';
@@ -45,6 +46,9 @@ final visibleClinicsProvider = FutureProvider<List<Clinic>>((ref) {
 /// for the patient app, a matching membership for the staff apps.
 final myClinicsProvider = FutureProvider<List<Clinic>>((ref) async {
   final app = ref.watch(appRoleProvider);
+  // Signed out, RLS would return nothing anyway; skip the round trips. The
+  // router asks this on every navigation, landing page included.
+  if (ref.watch(currentUserIdProvider) == null) return const [];
 
   // Every dependency is watched before the first await, so a change to any of
   // them rebuilds this provider rather than being missed across the gap.
@@ -70,36 +74,52 @@ final myClinicsProvider = FutureProvider<List<Clinic>>((ref) async {
   ];
 });
 
-/// The clinic the user picked, if they belong to several and have switched.
+/// The clinic slug in the URL — `dtouchdental` in `/dtouchdental/book` — or
+/// null outside any clinic (`/`, `/not-found`).
 ///
-/// Null means "no explicit choice", which resolves to the first clinic. Reset
-/// on every sign-in so one account's choice never carries into the next.
-class SelectedClinicId extends Notifier<String?> {
+/// The URL is the only record of which clinic is open: that is what makes a
+/// clinic bookmarkable and survive a reload. `ClinicScope` copies the route's
+/// slug in here; nothing else should write it.
+class RouteClinicSlug extends Notifier<String?> {
   @override
-  String? build() {
-    ref.watch(currentUserIdProvider);
-    return null;
-  }
+  String? build() => null;
 
-  void select(String clinicId) => state = clinicId;
+  void set(String? slug) {
+    if (state != slug) state = slug;
+  }
 }
 
-final selectedClinicIdProvider =
-    NotifierProvider<SelectedClinicId, String?>(SelectedClinicId.new);
+final routeClinicSlugProvider =
+    NotifierProvider<RouteClinicSlug, String?>(RouteClinicSlug.new);
 
-/// The clinic the app is currently showing.
+/// The public page of the clinic at a slug; null when no active clinic has it.
+/// Readable signed out.
+final clinicPageProvider = FutureProvider.family<ClinicPage?, String>(
+  (ref, slug) => ref.watch(healthRepositoryProvider).fetchClinicPage(slug),
+);
+
+/// The clinic in the URL, if this user may use this app there.
 ///
-/// Falls back to the first eligible clinic when nothing was picked, or when the
-/// picked clinic is no longer one this user may use here (removed from staff,
-/// clinic deactivated) — never to a clinic outside [myClinicsProvider].
+/// Null at a clinic they do not belong to (the router shows them the join or
+/// staff-code screen instead), and never a clinic outside [myClinicsProvider].
 final currentClinicProvider = Provider<AsyncValue<Clinic?>>((ref) {
-  final selected = ref.watch(selectedClinicIdProvider);
+  final slug = ref.watch(routeClinicSlugProvider);
   return ref.watch(myClinicsProvider).whenData((clinics) {
     for (final clinic in clinics) {
-      if (clinic.id == selected) return clinic;
+      if (clinic.slug == slug) return clinic;
     }
-    return clinics.isEmpty ? null : clinics.first;
+    return null;
   });
+});
+
+/// The clinic to brand the screen with: the user's own row when they belong
+/// to the clinic in the URL, otherwise its public page — so the sign-in, join
+/// and landing screens wear the clinic's colours too. Null outside a clinic.
+final routeBrandClinicProvider = Provider<Clinic?>((ref) {
+  final slug = ref.watch(routeClinicSlugProvider);
+  if (slug == null) return null;
+  return ref.watch(currentClinicProvider).value ??
+      ref.watch(clinicPageProvider(slug)).value?.clinic;
 });
 
 /// Every write needs the clinic's id; screens read it from here.

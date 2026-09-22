@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
 
@@ -421,7 +420,7 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
               onPressed: () {
                 Navigator.pop(ctx);
                 _reset();
-                context.go('/');
+                context.goInClinic('/check-in');
               },
               child: const Text('Done'),
             ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
 import '../../widgets/clinic_page_title.dart';
@@ -175,7 +174,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                       return AppointmentCard(
                         appointment: a,
                         onTap: () =>
-                            context.push('/appointments/${a.id}'),
+                            context.pushInClinic('/appointments/${a.id}'),
                         showPatient: true,
                       );
                     },

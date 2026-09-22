@@ -3,12 +3,14 @@ export 'package:supabase_flutter/supabase_flutter.dart'
 
 export 'src/app/bootstrap.dart';
 export 'src/app/clinic_app_shell.dart';
+export 'src/app/clinic_router.dart';
 export 'src/config/supabase_config.dart';
 export 'src/data/health_repository.dart';
 export 'src/models/app_role.dart';
 export 'src/models/appointment.dart';
 export 'src/models/appointment_status.dart';
 export 'src/models/clinic.dart';
+export 'src/models/clinic_page.dart';
 export 'src/models/clinical_note.dart';
 export 'src/models/doctor.dart';
 export 'src/models/membership.dart';

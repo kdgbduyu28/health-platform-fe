@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../models/staff_invite.dart';
 import '../providers/catalog_provider.dart';
@@ -64,11 +65,19 @@ class _StaffCodeScreenState extends ConsumerState<StaffCodeScreen> {
 
   /// Approval creates a membership (and a doctor's roster row), so every one
   /// of those has to be refetched for the clinic to appear.
-  void _refresh() {
+  ///
+  /// Approval at the clinic in the URL moves the router on by itself. A code
+  /// can belong to a different clinic, though, so if that is where access
+  /// arrived, go to `/` and let the router pick it.
+  Future<void> _refresh() async {
     ref.invalidate(myStaffRequestsProvider);
     ref.invalidate(myMembershipsProvider);
     ref.invalidate(myDoctorsProvider);
     ref.invalidate(visibleClinicsProvider);
+    final clinics = await ref.read(myClinicsProvider.future);
+    if (!mounted || clinics.isEmpty || Navigator.of(context).canPop()) return;
+    final here = ref.read(routeClinicSlugProvider);
+    if (!clinics.any((c) => c.slug == here)) GoRouter.of(context).go('/');
   }
 
   @override
@@ -94,7 +103,12 @@ class _StaffCodeScreenState extends ConsumerState<StaffCodeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Center(child: ClinicMark(size: 72)),
+                  Center(
+                    child: ClinicMark(
+                      clinic: isGate ? ref.watch(routeBrandClinicProvider) : null,
+                      size: 72,
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   Text(
                     isGate ? 'Join your clinic' : 'Join another clinic',

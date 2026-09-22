@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../app/clinic_router.dart';
+import '../models/app_role.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/supabase_providers.dart';
 import '../theme/brand.dart';
@@ -46,12 +49,19 @@ class _JoinClinicScreenState extends ConsumerState<JoinClinicScreen> {
     try {
       final clinicId = await ref.read(healthRepositoryProvider).joinClinic(code);
       // The new chart is what makes the clinic visible at all, so both lists
-      // have to be refetched — and the clinic just joined becomes current.
+      // have to be refetched.
       ref.invalidate(myPatientsProvider);
       ref.invalidate(visibleClinicsProvider);
-      ref.read(selectedClinicIdProvider.notifier).select(clinicId);
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+      final clinics = await ref.read(myClinicsProvider.future);
+      if (!mounted) return;
+      // Then open the clinic just joined — which is not necessarily the one
+      // in the URL: a code is the clinic's, whichever page it was typed on.
+      final router = GoRouter.of(context);
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+      for (final clinic in clinics) {
+        if (clinic.id == clinicId) {
+          router.go(clinicHome(clinic.slug, AppRole.patient));
+        }
       }
     } catch (e) {
       if (mounted) setState(() => _error = describeError(e));
@@ -65,6 +75,8 @@ class _JoinClinicScreenState extends ConsumerState<JoinClinicScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isGate = !Navigator.of(context).canPop();
+    // Reached from a clinic's page, the screen is about that clinic.
+    final clinic = isGate ? ref.watch(routeBrandClinicProvider) : null;
 
     return Scaffold(
       appBar: isGate ? null : AppBar(title: const Text('Join a clinic')),
@@ -77,10 +89,14 @@ class _JoinClinicScreenState extends ConsumerState<JoinClinicScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Center(child: ClinicMark(size: 72)),
+                  Center(child: ClinicMark(clinic: clinic, size: 72)),
                   const SizedBox(height: 24),
                   Text(
-                    isGate ? 'Join your clinic' : 'Add another clinic',
+                    clinic != null
+                        ? 'Join ${clinic.name}'
+                        : isGate
+                            ? 'Join your clinic'
+                            : 'Add another clinic',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold),

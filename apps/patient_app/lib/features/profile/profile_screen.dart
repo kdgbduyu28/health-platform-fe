@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:api_sdk/api_sdk.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -93,7 +92,9 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     const SizedBox(height: 24),
                     OutlinedButton.icon(
-                      onPressed: () => context.push('/join'),
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => const JoinClinicScreen(),
+                      )),
                       icon: const Icon(Icons.add_business_outlined),
                       label: const Text('Join another clinic'),
                     ),

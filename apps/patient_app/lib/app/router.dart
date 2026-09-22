@@ -1,43 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:api_sdk/api_sdk.dart';
 import '../features/home/home_screen.dart';
+import '../features/landing/clinic_landing_screen.dart';
 import '../features/appointments/my_appointments_screen.dart';
 import '../features/appointments/book_appointment_screen.dart';
 import '../features/appointments/appointment_detail_screen.dart';
 import '../features/profile/profile_screen.dart';
 
-final patientRouter = GoRouter(
-  initialLocation: '/',
-  routes: [
-    GoRoute(
-      path: '/join',
-      builder: (_, __) => const JoinClinicScreen(),
-    ),
-    GoRoute(
-      path: '/appointments/book',
-      builder: (_, __) => const BookAppointmentScreen(),
-    ),
-    GoRoute(
-      path: '/appointments/:id',
-      builder: (context, state) =>
-          AppointmentDetailScreen(appointmentId: state.pathParameters['id']!),
-    ),
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, shell) => _NavScaffold(shell: shell),
-      branches: [
-        StatefulShellBranch(routes: [
-          GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(path: '/appointments', builder: (_, __) => const MyAppointmentsScreen()),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
-        ]),
-      ],
-    ),
-  ],
+/// /:clinic                    the clinic's public page
+/// /:clinic/home               Home tab
+/// /:clinic/appointments       Appointments tab
+/// /:clinic/appointments/:id
+/// /:clinic/book
+/// /:clinic/profile            Profile tab
+///
+/// …plus sign-in and join, which `createClinicRouter` adds.
+final patientRouterProvider = Provider<GoRouter>(
+  (ref) => createClinicRouter(
+    ref,
+    appName: 'Patient',
+    landing: (_, __) => const ClinicLandingScreen(),
+    routes: [
+      GoRoute(
+        path: 'book',
+        builder: (_, __) => const BookAppointmentScreen(),
+      ),
+      GoRoute(
+        path: 'appointments/:id',
+        builder: (context, state) =>
+            AppointmentDetailScreen(appointmentId: state.pathParameters['id']!),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, shell) => _NavScaffold(shell: shell),
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(path: 'home', builder: (_, __) => const HomeScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: 'appointments',
+              builder: (_, __) => const MyAppointmentsScreen(),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: 'profile', builder: (_, __) => const ProfileScreen()),
+          ]),
+        ],
+      ),
+    ],
+  ),
 );
 
 class _NavScaffold extends StatelessWidget {

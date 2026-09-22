@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
 
@@ -131,7 +130,7 @@ class DashboardScreen extends ConsumerWidget {
                             ?.copyWith(fontWeight: FontWeight.bold)),
                     const Spacer(),
                     TextButton(
-                      onPressed: () => context.go('/schedule'),
+                      onPressed: () => context.goInClinic('/schedule'),
                       child: const Text('View All'),
                     ),
                   ],
@@ -155,7 +154,7 @@ class DashboardScreen extends ConsumerWidget {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: AppointmentCard(
                         appointment: a,
-                        onTap: () => context.push('/appointments/${a.id}'),
+                        onTap: () => context.pushInClinic('/appointments/${a.id}'),
                         showPatient: true,
                       ),
                     ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/clinic.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/supabase_providers.dart';
 import '../theme/brand.dart';
@@ -14,15 +15,19 @@ import 'password_reset_screen.dart';
 /// and a staff member is added by that clinic's admin — who can only add an
 /// account that already exists.
 ///
-/// There is no clinic branding here: nobody is known yet, so there is no
-/// clinic to brand the screen with.
+/// Reached through a clinic's link (`/:clinic/sign-in`), it wears that
+/// clinic's name and logo; at `/` nobody is known yet, so it is unbranded.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({
     super.key,
     required this.appName,
+    this.initialSignUp = false,
   });
 
   final String appName;
+
+  /// Open on the create-account form — the landing page's "Create account".
+  final bool initialSignUp;
 
   @override
   ConsumerState<SignInScreen> createState() => _SignInScreenState();
@@ -34,7 +39,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _fullName = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  bool _isSignUp = false;
+  late bool _isSignUp = widget.initialSignUp;
   bool _busy = false;
   String? _error;
   String? _notice;
@@ -108,7 +113,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _Header(appName: widget.appName),
+                    _Header(
+                      appName: widget.appName,
+                      clinic: ref.watch(routeBrandClinicProvider),
+                    ),
                     const SizedBox(height: 32),
                     if (_isSignUp) ...[
                       TextFormField(
@@ -228,9 +236,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.appName});
+  const _Header({required this.appName, this.clinic});
 
   final String appName;
+  final Clinic? clinic;
 
   @override
   Widget build(BuildContext context) {
@@ -239,10 +248,10 @@ class _Header extends StatelessWidget {
 
     return Column(
       children: [
-        const ClinicMark(size: 72),
+        ClinicMark(clinic: clinic, size: 72),
         const SizedBox(height: 16),
         Text(
-          'Sign in to your clinic',
+          clinic == null ? 'Sign in to your clinic' : 'Sign in to ${clinic!.name}',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineSmall
               ?.copyWith(fontWeight: FontWeight.bold),

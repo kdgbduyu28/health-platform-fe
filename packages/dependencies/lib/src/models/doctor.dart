@@ -1,3 +1,29 @@
+/// `available_weekdays` (1=Mon … 7=Sun) as people write it: `Mon–Fri`,
+/// `Mon, Wed, Fri`, `Every day`. A run of three or more days is a range.
+String formatWeekdays(Iterable<int> weekdays) {
+  const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final days = weekdays.where((d) => d >= 1 && d <= 7).toSet().toList()..sort();
+  if (days.length == 7) return 'Every day';
+
+  final parts = <String>[];
+  var i = 0;
+  while (i < days.length) {
+    var j = i;
+    while (j + 1 < days.length && days[j + 1] == days[j] + 1) {
+      j++;
+    }
+    if (j - i >= 2) {
+      parts.add('${names[days[i] - 1]}–${names[days[j] - 1]}');
+    } else {
+      for (var k = i; k <= j; k++) {
+        parts.add(names[days[k] - 1]);
+      }
+    }
+    i = j + 1;
+  }
+  return parts.join(', ');
+}
+
 /// A roster row from `public.doctors`. One per clinic a doctor practises at:
 /// the same account may appear on several clinics' rosters.
 class Doctor {

@@ -12,8 +12,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   intl: ^0.20.2
   flutter_riverpod: ^3.2.1
+  go_router: ^14.6.0
   supabase_flutter: ^2.8.0
 
 dev_dependencies:

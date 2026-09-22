@@ -9,7 +9,7 @@ class PatientApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClinicAppShell(
       appName: 'Patient',
-      routerConfig: patientRouter,
+      router: patientRouterProvider,
     );
   }
 }

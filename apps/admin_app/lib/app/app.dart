@@ -9,7 +9,7 @@ class AdminApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClinicAppShell(
       appName: 'Admin',
-      routerConfig: adminRouter,
+      router: adminRouterProvider,
     );
   }
 }

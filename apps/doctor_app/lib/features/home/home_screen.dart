@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
 
@@ -267,7 +266,7 @@ class _DoctorApptCard extends StatelessWidget {
     return Card(
       child: InkWell(
         onTap: () =>
-            context.push('/appointments/${appointment.id}'),
+            context.pushInClinic('/appointments/${appointment.id}'),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
