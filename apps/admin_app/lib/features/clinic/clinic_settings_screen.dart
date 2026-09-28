@@ -29,21 +29,25 @@ class ClinicSettingsScreen extends ConsumerWidget {
       ),
       body: clinic == null
           ? const SizedBox.shrink()
-          : ListView(
+          : CenteredScroll(
+              maxWidth: ContentWidth.list,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              children: [
-                _DetailsCard(clinic: clinic),
-                const SizedBox(height: 24),
-                const _SectionTitle('Bookings'),
-                const _BookingsCard(),
-                const SizedBox(height: 24),
-                const _SectionTitle('Patient join code'),
-                _JoinCodeCard(clinic: clinic),
-                const SizedBox(height: 24),
-                const StaffAccessSection(),
-                const SizedBox(height: 24),
-                const _StaffSection(),
-              ],
+              builder: (padding) => ListView(
+                padding: padding,
+                children: [
+                  _DetailsCard(clinic: clinic),
+                  const SizedBox(height: 24),
+                  const _SectionTitle('Bookings'),
+                  const _BookingsCard(),
+                  const SizedBox(height: 24),
+                  const _SectionTitle('Patient join code'),
+                  _JoinCodeCard(clinic: clinic),
+                  const SizedBox(height: 24),
+                  const StaffAccessSection(),
+                  const SizedBox(height: 24),
+                  const _StaffSection(),
+                ],
+              ),
             ),
     );
   }
@@ -178,12 +182,16 @@ class _DetailsCard extends ConsumerWidget {
                 ),
               ],
             ),
-            if (clinic.contactPhone != null || clinic.address != null)
-              const Divider(height: 24),
+            const Divider(height: 24),
             if (clinic.contactPhone != null)
               _InfoLine(icon: Icons.phone_outlined, text: clinic.contactPhone!),
             if (clinic.address != null)
               _InfoLine(icon: Icons.place_outlined, text: clinic.address!),
+            _InfoLine(
+              icon: Icons.event_repeat_outlined,
+              text: 'Recall patients ${clinic.recallMonths} months after '
+                  'their last visit',
+            ),
           ],
         ),
       ),
@@ -236,6 +244,7 @@ class _EditDetailsDialogState extends State<_EditDetailsDialog> {
       TextEditingController(text: widget.clinic.contactPhone ?? '');
   late final _address =
       TextEditingController(text: widget.clinic.address ?? '');
+  late int _recallMonths = widget.clinic.recallMonths;
 
   @override
   void dispose() {
@@ -257,6 +266,9 @@ class _EditDetailsDialogState extends State<_EditDetailsDialog> {
       'logo_url': _orNull(_logo),
       'contact_phone': _orNull(_phone),
       'address': _orNull(_address),
+      // Only when changed, so saving the other details never depends on it.
+      if (_recallMonths != widget.clinic.recallMonths)
+        'recall_months': _recallMonths,
     });
   }
 
@@ -335,6 +347,22 @@ class _EditDetailsDialogState extends State<_EditDetailsDialog> {
                 controller: _address,
                 maxLines: 2,
                 decoration: const InputDecoration(labelText: 'Address'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                initialValue: _recallMonths,
+                decoration: const InputDecoration(
+                  labelText: 'Recall after',
+                  helperText: 'Patients with no visit since, and nothing '
+                      'booked, show as due for recall',
+                  helperMaxLines: 2,
+                ),
+                items: [
+                  for (final m in {3, 4, 6, 9, 12, 18, 24, _recallMonths}.toList()
+                    ..sort())
+                    DropdownMenuItem(value: m, child: Text('$m months')),
+                ],
+                onChanged: (v) => setState(() => _recallMonths = v ?? 6),
               ),
             ],
           ),

@@ -27,6 +27,14 @@ class ProfileScreen extends ConsumerWidget {
         slivers: [
           SliverAppBar(
             expandedHeight: 200,
+            actions: [
+              IconButton(
+                tooltip: 'Settings',
+                color: cs.onPrimary,
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => context.pushInClinic('/preferences'),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(
@@ -67,72 +75,88 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
           ),
-          SliverList.list(
-            children: [
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    _ProfileTile(
-                      icon: Icons.phone_outlined,
-                      label: 'Phone',
-                      value: phone,
-                    ),
-                    _ProfileTile(
-                      icon: Icons.email_outlined,
-                      label: 'Email',
-                      value: email,
-                    ),
-                    if (patient?.age != null)
+          SliverCentered(
+            maxWidth: ContentWidth.list + 32,
+            padding: EdgeInsets.zero,
+            sliver: SliverList.list(
+              children: [
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
                       _ProfileTile(
-                        icon: Icons.cake_outlined,
-                        label: 'Age',
-                        value: '${patient!.age} years old',
+                        icon: Icons.phone_outlined,
+                        label: 'Phone',
+                        value: phone,
                       ),
-                    const SizedBox(height: 24),
-                    FilledButton.tonalIcon(
-                      onPressed: () => context.pushInClinic('/bills'),
-                      icon: const Icon(Icons.receipt_long_outlined),
-                      label: const Text('Bills & payments'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                        builder: (_) => const JoinClinicScreen(),
-                      )),
-                      icon: const Icon(Icons.add_business_outlined),
-                      label: const Text('Join another clinic'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Edit Profile'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => showChangePasswordDialog(context),
-                      icon: const Icon(Icons.password_outlined),
-                      label: const Text('Change password'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      // Signing out clears the session, which drops every RLS
-                      // grant with it — the app shell then swaps the router
-                      // back to the sign-in screen on its own.
-                      onPressed: () =>
-                          ref.read(healthRepositoryProvider).signOut(),
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red)),
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Sign Out'),
-                    ),
-                  ],
+                      _ProfileTile(
+                        icon: Icons.email_outlined,
+                        label: 'Email',
+                        value: email,
+                      ),
+                      if (patient?.age != null)
+                        _ProfileTile(
+                          icon: Icons.cake_outlined,
+                          label: 'Age',
+                          value: '${patient!.age} years old',
+                        ),
+                      const SizedBox(height: 24),
+                      FilledButton.tonalIcon(
+                        onPressed: () => context.pushInClinic('/bills'),
+                        icon: const Icon(Icons.receipt_long_outlined),
+                        label: const Text('Bills & payments'),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonalIcon(
+                        onPressed: () => showCalendarFeedSheet(context),
+                        icon: const Icon(Icons.event_available_outlined),
+                        label: const Text('Visits in my calendar'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) => const JoinClinicScreen(),
+                        )),
+                        icon: const Icon(Icons.add_business_outlined),
+                        label: const Text('Join another clinic'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => context.pushInClinic('/intake'),
+                        icon: const Icon(Icons.assignment_ind_outlined),
+                        label: const Text('My information & health form'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => context.pushInClinic('/preferences'),
+                        icon: const Icon(Icons.settings_outlined),
+                        label: const Text('Settings'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => showChangePasswordDialog(context),
+                        icon: const Icon(Icons.password_outlined),
+                        label: const Text('Change password'),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        // Signing out clears the session, which drops every RLS
+                        // grant with it — the app shell then swaps the router
+                        // back to the sign-in screen on its own.
+                        onPressed: () =>
+                            ref.read(healthRepositoryProvider).signOut(),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: cs.error,
+                            side: BorderSide(color: cs.error)),
+                        icon: const Icon(Icons.logout),
+                        label: const Text('Sign Out'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

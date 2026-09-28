@@ -38,13 +38,17 @@ enum InvoiceStatus {
       };
 }
 
-/// Mirrors `public.payment_method`.
+/// Mirrors `public.payment_method`, in the order the desk picks from: the
+/// [common] ones first.
 enum PaymentMethod {
   cash('cash', 'Cash', Icons.payments_outlined),
   gcash('gcash', 'GCash', Icons.phone_iphone),
+  bpi('bpi', 'Bank · BPI', Icons.account_balance_outlined),
+  bdo('bdo', 'Bank · BDO', Icons.account_balance_outlined),
+  qrph('qrph', 'QR Ph', Icons.qr_code_2),
   maya('maya', 'Maya', Icons.phone_iphone),
   card('card', 'Card', Icons.credit_card),
-  bankTransfer('bank_transfer', 'Bank transfer', Icons.account_balance_outlined),
+  bankTransfer('bank_transfer', 'Other bank', Icons.account_balance_outlined),
   hmo('hmo', 'HMO', Icons.health_and_safety_outlined),
   other('other', 'Other', Icons.more_horiz);
 
@@ -56,6 +60,9 @@ enum PaymentMethod {
 
   static PaymentMethod fromWire(String value) =>
       values.firstWhere((m) => m.wire == value);
+
+  /// How most patients pay; the rest sit behind "More".
+  static const common = [cash, gcash, bpi, bdo, qrph];
 
   /// Whether the desk should ask for a reference (a GCash ref, an HMO
   /// approval code) — cash has none.

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/appointment.dart';
+import '../models/appointment_status.dart';
+import '../theme/tone.dart';
 import 'status_badge.dart';
 
 class AppointmentCard extends StatelessWidget {
@@ -22,6 +24,7 @@ class AppointmentCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final fmt = DateFormat('EEE, MMM d · h:mm a');
+    if (showPatient) return _staff(context);
 
     return Card(
       child: InkWell(
@@ -66,6 +69,84 @@ class AppointmentCard extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+extension on AppointmentCard {
+  /// For the front desk and admins: who first, then what and with whom, the
+  /// time in a block down the side — denser, so a tablet shows the morning
+  /// at a glance. No date: the staff lists this serves are one day's.
+  Widget _staff(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final a = appointment;
+    final faded = a.status == AppointmentStatus.cancelled ||
+        a.status == AppointmentStatus.noShow;
+
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 64,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: a.status.color.readableIn(context).withAlpha(24),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(DateFormat('h:mm').format(a.dateTime),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 16)),
+                    Text(
+                      DateFormat('a').format(a.dateTime),
+                      style: TextStyle(
+                          fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      a.patient.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        decoration: faded ? TextDecoration.lineThrough : null,
+                        color: faded ? cs.onSurfaceVariant : null,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        a.service,
+                        if (showDoctor) 'Dr. ${a.doctor.name}',
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 13, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              StatusBadge(status: a.status, small: true),
             ],
           ),
         ),

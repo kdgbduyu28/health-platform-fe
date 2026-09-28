@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../app/adaptive_layout.dart';
 import '../models/app_role.dart';
 import '../models/invoice.dart';
 import '../models/money.dart';
@@ -13,6 +14,7 @@ import '../providers/clinic_provider.dart';
 import '../providers/clinical_provider.dart';
 import '../providers/supabase_providers.dart';
 import 'async_view.dart';
+import 'ledger_view.dart' show PaymentMethodChips;
 
 /// One bill. The front desk and admins build it while it is a draft, issue
 /// it, and take payments on it; an admin can void a payment. Everyone else —
@@ -67,48 +69,73 @@ class InvoiceScreen extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async => invalidateBilling(ref),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _Header(invoice: v, showPatient: !isPatient),
-            const SizedBox(height: 16),
-            _Lines(invoice: v, editing: editing, actions: actions),
-            const SizedBox(height: 12),
-            _Totals(invoice: v, editing: editing, actions: actions),
-            if (v.notes != null || canBill) ...[
-              const SizedBox(height: 12),
-              _NotesCard(invoice: v, editable: canBill, actions: actions),
-            ],
-            if (v.payments.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _Payments(invoice: v, canVoid: isAdmin, actions: actions),
-            ],
-            const SizedBox(height: 20),
-            if (editing)
-              FilledButton.icon(
-                onPressed: v.items.isEmpty ? null : actions.issue,
-                icon: const Icon(Icons.send_outlined),
-                label: const Text('Issue bill'),
-              )
-            else if (canBill && v.isOpen)
-              FilledButton.icon(
-                onPressed: actions.recordPayment,
-                icon: const Icon(Icons.payments_outlined),
-                label: Text('Record payment · ${formatPeso(v.balance)} due'),
-              )
-            else if (isPatient && v.isOpen)
-              Text(
-                'Please settle ${formatPeso(v.balance)} at the clinic\'s front desk.',
-                textAlign: TextAlign.center,
+        child: CenteredScroll(
+          maxWidth: ContentWidth.detail,
+          builder: (padding) => ListView(
+            padding: padding,
+            children: [
+              // A wide screen puts the bill itself on the left and what is
+              // done with it — notes, payments, the next step — on the right.
+              SplitColumns(
+                startFlex: 3,
+                endFlex: 2,
+                start: [
+                  _Header(invoice: v, showPatient: !isPatient),
+                  const SizedBox(height: 16),
+                  _Lines(invoice: v, editing: editing, actions: actions),
+                  const SizedBox(height: 12),
+                  _Totals(invoice: v, editing: editing, actions: actions),
+                  const SizedBox(height: 12),
+                ],
+                end: [
+                  if (v.notes != null || canBill) ...[
+                    _NotesCard(invoice: v, editable: canBill, actions: actions),
+                    const SizedBox(height: 12),
+                  ],
+                  if (v.payments.isNotEmpty) ...[
+                    _Payments(invoice: v, canVoid: isAdmin, actions: actions),
+                    const SizedBox(height: 12),
+                  ],
+                  const SizedBox(height: 8),
+                  if (editing) ...[
+                    // Most bills are paid on the spot: issue and pay in one.
+                    FilledButton.icon(
+                      onPressed: v.items.isEmpty ? null : actions.issueAndPay,
+                      icon: const Icon(Icons.payments_outlined),
+                      label: Text(v.total > 0
+                          ? 'Take payment · ${formatPeso(v.total)}'
+                          : 'Take payment'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: v.items.isEmpty ? null : actions.issue,
+                      icon: const Icon(Icons.send_outlined),
+                      label: const Text('Issue without payment'),
+                    ),
+                  ] else if (canBill && v.isOpen)
+                    FilledButton.icon(
+                      onPressed: actions.recordPayment,
+                      icon: const Icon(Icons.payments_outlined),
+                      label:
+                          Text('Record payment · ${formatPeso(v.balance)} due'),
+                    )
+                  else if (isPatient && v.isOpen)
+                    Text(
+                      'Please settle ${formatPeso(v.balance)} at the clinic\'s front desk.',
+                      textAlign: TextAlign.center,
+                    ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'This is a statement of account, not an official receipt.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.outline),
+                  ),
+                ],
               ),
-            const SizedBox(height: 16),
-            Text(
-              'This is a statement of account, not an official receipt.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 12, color: Theme.of(context).colorScheme.outline),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -499,6 +526,35 @@ class _Actions {
         done: 'Bill issued');
   }
 
+  /// Issues the draft and records a payment on it, once the desk has said
+  /// how the patient paid. Cancelling the payment leaves it a draft.
+  Future<void> issueAndPay() async {
+    final result = await showDialog<_PaymentDraft>(
+      context: context,
+      builder: (_) => _PaymentDialog(balance: invoice.total),
+    );
+    if (result == null) return;
+    final repo = ref.read(healthRepositoryProvider);
+    await _run(
+      () async {
+        await repo.issueInvoice(invoice.id);
+        // A bill discounted to nothing is paid the moment it is issued.
+        if (invoice.total <= 0) return;
+        await repo.recordPayment(
+          invoiceId: invoice.id,
+          clinicId: invoice.clinicId,
+          amount: result.amount,
+          method: result.method,
+          reference: result.reference,
+        );
+      },
+      done: result.amount >= invoice.total
+          ? 'Paid in full'
+          : '${formatPeso(result.amount)} received; '
+              '${formatPeso(invoice.total - result.amount)} still owed',
+    );
+  }
+
   Future<void> recordPayment() async {
     final result = await showDialog<_PaymentDraft>(
       context: context,
@@ -863,6 +919,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   late final _amount = TextEditingController(text: widget.balance.toStringAsFixed(2));
   final _reference = TextEditingController();
   PaymentMethod _method = PaymentMethod.cash;
+  bool _allMethods = false;
 
   @override
   void dispose() {
@@ -882,18 +939,16 @@ class _PaymentDialogState extends State<_PaymentDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final m in PaymentMethod.values)
-                  ChoiceChip(
-                    avatar: Icon(m.icon, size: 16),
-                    label: Text(m.displayName),
-                    selected: m == _method,
-                    onSelected: (_) => setState(() => _method = m),
-                  ),
-              ],
+            Text('How did they pay?',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            PaymentMethodChips(
+              value: _method,
+              onChanged: (m) => setState(() => _method = m),
+              showAll: _allMethods,
+              onShowAll: () => setState(() => _allMethods = true),
             ),
             const SizedBox(height: 12),
             TextField(

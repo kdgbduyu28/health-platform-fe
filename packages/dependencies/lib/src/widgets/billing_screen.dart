@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../app/adaptive_layout.dart';
 import '../models/invoice.dart';
 import '../models/money.dart';
 import '../models/patient.dart';
@@ -8,22 +10,28 @@ import '../providers/billing_provider.dart';
 import '../providers/catalog_provider.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/supabase_providers.dart';
+import '../theme/tone.dart';
 import 'account_menu.dart';
 import 'async_view.dart';
 import 'billing_widgets.dart';
 import 'clinic_title.dart';
+import 'ledger_view.dart';
 import 'notifications_button.dart';
 
 enum _Filter { unpaid, drafts, paid, all }
 
-/// The clinic's bills, for the front desk and admins: what came in today,
-/// what is still owed, and every bill by state.
+/// The clinic's bills and its ledger, for the front desk and admins.
 ///
-/// The package has no router; [onOpenInvoice] is how the app opens one.
+/// Bills: what came in today, what is still owed, and every bill by state.
+/// Ledger: gross, paid, pending, expenses and net over some days.
+///
+/// The package has no router; [onOpenInvoice] is how the app opens a bill
+/// and [onOpenPrices] its price list.
 class BillingScreen extends ConsumerStatefulWidget {
-  const BillingScreen({super.key, required this.onOpenInvoice});
+  const BillingScreen({super.key, required this.onOpenInvoice, this.onOpenPrices});
 
   final void Function(String invoiceId) onOpenInvoice;
+  final VoidCallback? onOpenPrices;
 
   @override
   ConsumerState<BillingScreen> createState() => _BillingScreenState();
@@ -41,11 +49,39 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     final summary =
         ref.watch(billingSummaryProvider((from: today, to: today))).value;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const ClinicTitle(),
-        actions: const [NotificationsButton(), AccountMenuButton(), SizedBox(width: 8)],
+    return DefaultTabController(
+      length: canBill ? 2 : 1,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const ClinicTitle(page: 'Billing'),
+          actions: [
+            if (canBill && widget.onOpenPrices != null)
+              IconButton(
+                tooltip: 'Prices',
+                icon: const Icon(Icons.sell_outlined),
+                onPressed: widget.onOpenPrices,
+              ),
+            const NotificationsButton(),
+            const AccountMenuButton(),
+            const SizedBox(width: 8),
+          ],
+          bottom: canBill
+              ? const TabBar(tabs: [Tab(text: 'Bills'), Tab(text: 'Ledger')])
+              : null,
+        ),
+        body: TabBarView(
+          children: [
+            _bills(context, async, canBill, summary),
+            if (canBill) LedgerView(onOpenInvoice: widget.onOpenInvoice),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _bills(BuildContext context, AsyncValue<List<Invoice>> async,
+      bool canBill, BillingSummary? summary) {
+    return Scaffold(
       floatingActionButton: canBill
           ? FloatingActionButton.extended(
               onPressed: _newBill,
@@ -55,9 +91,13 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
           : null,
       body: RefreshIndicator(
         onRefresh: () async => invalidateBilling(ref),
-        child: CustomScrollView(
+        child: LayoutBuilder(builder: (context, box) {
+          // Columns once there is room: patient, what for, number, date,
+          // total, balance and state line up to scan down.
+          _wide = box.maxWidth >= Breakpoints.twoPane;
+          return CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
+            _centered(SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Row(
@@ -65,7 +105,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                     _Stat(
                       label: 'Collected today',
                       value: summary == null ? '—' : formatPeso(summary.collected),
-                      color: InvoiceStatus.paid.color,
+                      color: InvoiceStatus.paid.color.readableIn(context),
                     ),
                     const SizedBox(width: 8),
                     _Stat(
@@ -74,25 +114,26 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                           : 'Owed on ${summary.unpaidCount} '
                               '${summary.unpaidCount == 1 ? 'bill' : 'bills'}',
                       value: summary == null ? '—' : formatPeso(summary.outstanding),
-                      color: InvoiceStatus.issued.color,
+                      color: InvoiceStatus.issued.color.readableIn(context),
                     ),
                   ],
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
+            )),
+            _centered(SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                 child: TextField(
-                  onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+                  onChanged: (v) =>
+                      setState(() => _query = v.trim().toLowerCase()),
                   decoration: const InputDecoration(
                     hintText: 'Search by patient or bill number…',
                     prefixIcon: Icon(Icons.search),
                   ),
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
+            )),
+            _centered(SliverToBoxAdapter(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -114,7 +155,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                   ],
                 ),
               ),
-            ),
+            )),
             if (!async.hasValue)
               SliverFillRemaining(
                 child: AsyncView(
@@ -127,10 +168,13 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
               ..._list(async.requireValue),
             const SliverPadding(padding: EdgeInsets.only(bottom: 88)),
           ],
-        ),
+        );
+        }),
       ),
     );
   }
+
+  bool _wide = false;
 
   List<Widget> _list(List<Invoice> all) {
     final shown = all.where((v) {
@@ -159,8 +203,21 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
         ),
       ];
     }
+    if (_wide) {
+      return [
+        _centered(const SliverToBoxAdapter(child: _BillRowHeading())),
+        _centered(SliverList.builder(
+          itemCount: shown.length,
+          itemBuilder: (context, i) => _BillRow(
+            invoice: shown[i],
+            last: i == shown.length - 1,
+            onTap: () => widget.onOpenInvoice(shown[i].id),
+          ),
+        )),
+      ];
+    }
     return [
-      SliverList.separated(
+      _centered(SliverList.separated(
         itemCount: shown.length,
         separatorBuilder: (_, __) => const SizedBox(height: 4),
         itemBuilder: (context, i) => Padding(
@@ -171,9 +228,16 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
             onTap: () => widget.onOpenInvoice(shown[i].id),
           ),
         ),
-      ),
+      )),
     ];
   }
+
+  /// One column of bills, centred; wider once it is a table.
+  Widget _centered(Widget sliver) => SliverCentered(
+        maxWidth: (_wide ? ContentWidth.wide : ContentWidth.list) + 32,
+        padding: EdgeInsets.zero,
+        sliver: sliver,
+      );
 
   /// A bill not tied to a visit — a retainer, a product. Most bills start
   /// from the visit instead.
@@ -195,6 +259,114 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       messenger.showSnackBar(SnackBar(
           content: Text(describeError(e)), behavior: SnackBarBehavior.floating));
     }
+  }
+}
+
+// ── Bills as a table (tablet and up) ────────────────────────────────────────
+
+const _billFlex = [4, 4, 3, 3, 3, 3];
+const _statusWidth = 104.0;
+
+/// Lays [cells] out on the table's columns: the flexes above, then the state.
+Widget _billCells(List<Widget> cells) => Row(
+      children: [
+        for (final (i, c) in cells.indexed)
+          i < _billFlex.length
+              ? Expanded(flex: _billFlex[i], child: c)
+              : SizedBox(width: _statusWidth, child: c),
+      ],
+    );
+
+class _BillRowHeading extends StatelessWidget {
+  const _BillRowHeading();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelMedium?.copyWith(
+        fontWeight: FontWeight.w700, color: cs.onSurfaceVariant);
+    Widget h(String t, {bool end = false}) => Text(t,
+        style: style, textAlign: end ? TextAlign.end : TextAlign.start);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: _billCells([
+        h('Patient'),
+        h('For'),
+        h('Bill'),
+        h('Date'),
+        h('Total', end: true),
+        h('Balance', end: true),
+        Padding(padding: const EdgeInsets.only(left: 16), child: h('State')),
+      ]),
+    );
+  }
+}
+
+class _BillRow extends StatelessWidget {
+  const _BillRow({required this.invoice, required this.onTap, required this.last});
+
+  final Invoice invoice;
+  final VoidCallback onTap;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final v = invoice;
+    final when = v.visitAt ?? v.issuedAt ?? v.createdAt;
+    final muted = TextStyle(color: cs.onSurfaceVariant);
+    final radius = last
+        ? const BorderRadius.vertical(bottom: Radius.circular(16))
+        : BorderRadius.zero;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: radius,
+        border: Border(
+            bottom: last
+                ? BorderSide.none
+                : BorderSide(color: cs.outlineVariant.withAlpha(120))),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: _billCells([
+            Text(v.patient?.name ?? '—',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(v.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(v.label, style: muted),
+            Text(DateFormat('MMM d, y').format(when), style: muted),
+            Text(formatPeso(v.total),
+                textAlign: TextAlign.end,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              v.isOpen ? formatPeso(v.balance) : '—',
+              textAlign: TextAlign.end,
+              style: v.isOpen
+                  ? TextStyle(color: cs.error, fontWeight: FontWeight.w600)
+                  : muted,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: InvoiceStatusChip(status: v.status),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 }
 
@@ -259,17 +431,11 @@ class _PatientPickerState extends ConsumerState<_PatientPicker> {
             ),
             const SizedBox(height: 8),
             Expanded(
+              // Searched in the database; the first few matches only.
               child: AsyncView(
-                value: ref.watch(patientsProvider),
-                onRetry: () => ref.invalidate(patientsProvider),
-                builder: (patients) {
-                  final shown = [
-                    for (final p in patients)
-                      if (_query.isEmpty ||
-                          p.name.toLowerCase().contains(_query) ||
-                          p.phone.contains(_query))
-                        p,
-                  ];
+                value: ref.watch(patientSearchProvider(_query)),
+                onRetry: () => ref.invalidate(patientSearchProvider(_query)),
+                builder: (shown) {
                   return ListView.builder(
                     itemCount: shown.length,
                     itemBuilder: (context, i) => ListTile(

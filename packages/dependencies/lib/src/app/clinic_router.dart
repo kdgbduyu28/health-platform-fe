@@ -6,7 +6,10 @@ import '../models/app_role.dart';
 import '../models/clinic.dart';
 import '../models/clinic_page.dart';
 import '../providers/clinic_provider.dart';
+import '../providers/intake_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../providers/supabase_providers.dart';
+import '../widgets/intake_screens.dart';
 import '../widgets/join_clinic_screen.dart';
 import '../widgets/sign_in_screen.dart';
 import '../widgets/staff_code_screen.dart';
@@ -23,6 +26,10 @@ import 'clinic_app_shell.dart';
 ///   /:clinic/join          patient app: join with the clinic's code
 ///   /:clinic/staff-code    doctor and assistant apps: request access
 ///   /:clinic/no-access     admin app: signed in, but not an admin here
+///   /:clinic/intake        patient app: the information form; until it is
+///                          filled in, every page at the clinic leads here
+///   /:clinic/kiosk         assistant and admin apps: the tablet handed to a
+///                          patient; while one is on, EVERY page leads here
 ///   /:clinic/…             [routes], relative to `/:clinic`
 ///
 /// Who may see which of those is decided in one place, [_redirect], and
@@ -90,6 +97,16 @@ GoRouter createClinicRouter(
                   path: 'staff-code',
                   builder: (_, __) => const StaffCodeScreen(),
                 ),
+              if (app == AppRole.patient)
+                GoRoute(
+                  path: 'intake',
+                  builder: (_, __) => const MyIntakeScreen(),
+                ),
+              if (app.registersPatients)
+                GoRoute(
+                  path: 'kiosk',
+                  builder: (_, __) => const KioskScreen(),
+                ),
               if (app == AppRole.admin)
                 GoRoute(
                   path: 'no-access',
@@ -131,6 +148,50 @@ extension ClinicNavigation on BuildContext {
 
   Future<T?> pushInClinic<T extends Object?>(String subpath) =>
       push<T>(clinicPath(subpath));
+
+  /// Opens [subpath] — or, when that page is already open further down the
+  /// stack, goes back to it instead of stacking a second copy.
+  ///
+  /// For pages that link to each other: a visit links to the patient's
+  /// history and the history links back to the visit, so pushing both ways
+  /// grows the stack on every tap, and Back walks the same two pages over
+  /// and over.
+  void openInClinic(String subpath) {
+    final target = clinicPath(subpath);
+    final router = GoRouter.of(this);
+    final pages = _openPages(router.routerDelegate.currentConfiguration);
+    final at = pages.lastIndexOf(target);
+    if (at == -1) {
+      router.push(target);
+      return;
+    }
+    // Each pop takes the top page off the router's stack there and then, so
+    // popping the pages above the target one by one lands on it.
+    for (var i = pages.length - 1; i > at; i--) {
+      router.pop();
+    }
+  }
+}
+
+/// The locations of the pages on screen, bottom first: the page navigated to
+/// with `go`, then every page pushed on top of it.
+List<String> _openPages(RouteMatchList config) {
+  String? base;
+  final pushed = <String>[];
+  void walk(List<RouteMatchBase> matches) {
+    for (final m in matches) {
+      if (m is ImperativeRouteMatch) {
+        pushed.add(m.matches.uri.path);
+      } else if (m is ShellRouteMatch) {
+        walk(m.matches);
+      } else if (m is RouteMatch) {
+        base = m.matchedLocation;
+      }
+    }
+  }
+
+  walk(config.matches);
+  return [if (base != null) base!, ...pushed];
 }
 
 List<String> _segments(Uri uri) =>
@@ -162,13 +223,24 @@ Future<String?> _redirect(
       !ref.read(passwordResetInProgressProvider);
   final segments = _segments(state.uri);
 
+  // ── The tablet is in a patient's hands ──
+  // Before anything else, so no URL — typed, bookmarked or the back button's —
+  // reaches the app until a staff PIN ends the session.
+  if (signedIn && app.registersPatients) {
+    final kiosk = ref.read(kioskProvider);
+    if (kiosk != null) return state.uri.path == kiosk.path ? null : kiosk.path;
+  }
+
   // ── `/` ──
   if (segments.isEmpty) {
     if (!signedIn) return null;
     final clinics = await _myClinics(ref);
     // Nothing yet: the root screen asks for a join or staff code.
     if (clinics == null || clinics.isEmpty) return null;
-    return clinicHome(clinics.first.slug, app);
+    // Back to where they were last time, if they still belong there.
+    final last = ref.read(preferencesProvider).lastClinicSlug(app);
+    final slug = clinics.any((c) => c.slug == last) ? last! : clinics.first.slug;
+    return clinicHome(slug, app);
   }
 
   final slug = segments.first.toLowerCase();
@@ -213,8 +285,15 @@ Future<String?> _redirect(
   }
 
   if (isMember) {
-    const gates = {'join', 'staff-code', 'no-access'};
-    return gates.contains(sub) ? home : null;
+    ref.read(preferencesProvider).setLastClinicSlug(app, slug);
+    // `kiosk` without a session (ended, or a stale link) is a gate too.
+    const gates = {'join', 'staff-code', 'no-access', 'kiosk'};
+    if (gates.contains(sub)) return home;
+    if (app == AppRole.patient && sub != 'intake') {
+      final clinicId = clinics.firstWhere((c) => c.slug == slug).id;
+      if (await _needsIntake(ref, clinicId)) return '/$slug/intake';
+    }
+    return null;
   }
 
   // Signed in at a clinic this app is not theirs at. The patient app still
@@ -240,6 +319,19 @@ Future<String?> _redirect(
   }
 }
 
+/// Whether the signed-in patient has yet to fill in the information form at
+/// [clinicId]. False when that cannot be told (offline): the gate is for
+/// first-time patients, and not worth locking anyone out over.
+Future<bool> _needsIntake(Ref ref, String clinicId) async {
+  try {
+    final charts = await ref.read(myPatientsProvider.future);
+    for (final c in charts) {
+      if (c.clinicId == clinicId) return c.hasIntake == false;
+    }
+  } catch (_) {}
+  return false;
+}
+
 /// Null when the list could not be loaded.
 Future<List<Clinic>?> _myClinics(Ref ref) async {
   try {
@@ -250,11 +342,13 @@ Future<List<Clinic>?> _myClinics(Ref ref) async {
 }
 
 /// Re-runs the redirect whenever the answer could change: signing in or out,
-/// finishing a password reset, joining a clinic, being approved or removed.
+/// finishing a password reset, joining a clinic, being approved or removed,
+/// handing the tablet to a patient and taking it back.
 class _RouterRefresh extends ChangeNotifier {
   _RouterRefresh(Ref ref) {
     ref.listen(isSignedInProvider, (_, __) => notifyListeners());
     ref.listen(passwordResetInProgressProvider, (_, __) => notifyListeners());
+    ref.listen(kioskProvider, (_, __) => notifyListeners());
     ref.listen(myClinicsProvider, (previous, next) {
       // Only settled lists matter; a refetch in flight changes nothing yet.
       if (next.hasValue && previous?.value != next.value) notifyListeners();

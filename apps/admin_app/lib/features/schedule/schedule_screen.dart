@@ -25,13 +25,18 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   Widget build(BuildContext context) {
     final allClinicAsync = ref.watch(clinicAppointmentsProvider);
     final allClinic = allClinicAsync.value ?? const <Appointment>[];
-    final selectedDay = allClinic
-        .where((a) =>
-            a.dateTime.year == _selectedDate.year &&
-            a.dateTime.month == _selectedDate.month &&
-            a.dateTime.day == _selectedDate.day)
-        .toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    final selectedDay =
+        allClinic
+            .where(
+              (a) =>
+                  a.dateTime.year == _selectedDate.year &&
+                  a.dateTime.month == _selectedDate.month &&
+                  a.dateTime.day == _selectedDate.day,
+            )
+            .toList()
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    final board =
+        ref.watch(appointmentViewProvider) == AppointmentView.board;
 
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -40,6 +45,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       appBar: AppBar(
         title: const ClinicPageTitle('Schedule'),
         actions: [
+          const AppointmentViewToggle(),
           IconButton(
             icon: const Icon(Icons.today),
             tooltip: 'Go to today',
@@ -65,16 +71,20 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                 final day = DateTime.now()
                     .subtract(const Duration(days: 7))
                     .add(Duration(days: i));
-                final isSelected = day.year == _selectedDate.year &&
+                final isSelected =
+                    day.year == _selectedDate.year &&
                     day.month == _selectedDate.month &&
                     day.day == _selectedDate.day;
-                final isToday = day.year == DateTime.now().year &&
+                final isToday =
+                    day.year == DateTime.now().year &&
                     day.month == DateTime.now().month &&
                     day.day == DateTime.now().day;
-                final hasAppts = allClinic.any((a) =>
-                    a.dateTime.year == day.year &&
-                    a.dateTime.month == day.month &&
-                    a.dateTime.day == day.day);
+                final hasAppts = allClinic.any(
+                  (a) =>
+                      a.dateTime.year == day.year &&
+                      a.dateTime.month == day.month &&
+                      a.dateTime.day == day.day,
+                );
 
                 return GestureDetector(
                   onTap: () => setState(() => _selectedDate = day),
@@ -85,8 +95,8 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                       color: isSelected
                           ? cs.primary
                           : isToday
-                              ? cs.primaryContainer
-                              : cs.surfaceContainerLow,
+                          ? cs.primaryContainer
+                          : cs.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -130,23 +140,24 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
           ),
 
           // Day header
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Text(
-                  DateFormat('EEEE, MMMM d').format(_selectedDate),
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                Text(
-                  '${selectedDay.length} appointment${selectedDay.length == 1 ? '' : 's'}',
-                  style:
-                      TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                ),
-              ],
+          Centered(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Text(
+                    DateFormat('EEEE, MMMM d').format(_selectedDate),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${selectedDay.length} appointment${selectedDay.length == 1 ? '' : 's'}',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -157,27 +168,40 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.event_available,
-                            size: 56, color: cs.outline),
+                        Icon(
+                          Icons.event_available,
+                          size: 56,
+                          color: cs.outline,
+                        ),
                         const SizedBox(height: 12),
-                        Text('No appointments',
-                            style: theme.textTheme.titleMedium),
+                        Text(
+                          'No appointments',
+                          style: theme.textTheme.titleMedium,
+                        ),
                       ],
                     ),
                   )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: selectedDay.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, i) {
-                      final a = selectedDay[i];
-                      return AppointmentCard(
-                        appointment: a,
-                        onTap: () =>
-                            context.pushInClinic('/appointments/${a.id}'),
-                        showPatient: true,
-                      );
-                    },
+                : board
+                ? AppointmentBoard(appointments: selectedDay)
+                : CenteredScroll(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    builder: (padding) => ListView(
+                      padding: padding,
+                      children: [
+                        CardColumns(
+                          children: [
+                            for (final a in selectedDay)
+                              AppointmentCard(
+                                appointment: a,
+                                onTap: () => context.pushInClinic(
+                                  '/appointments/${a.id}',
+                                ),
+                                showPatient: true,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
           ),
         ],

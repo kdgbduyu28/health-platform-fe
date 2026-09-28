@@ -37,141 +37,158 @@ class AppointmentDetailScreen extends ConsumerWidget {
         title: const Text('Appointment Details'),
         leading: BackButton(onPressed: () => context.pop()),
       ),
-      body: ListView(
+      body: CenteredScroll(
+        maxWidth: ContentWidth.list,
         padding: const EdgeInsets.all(16),
-        children: [
-          // Hero card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [cs.primary, cs.secondary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                StatusBadge(status: appointment.status),
-                const SizedBox(height: 12),
-                Text(
-                  appointment.service,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                      color: cs.onPrimary, fontWeight: FontWeight.bold),
+        builder: (padding) => ListView(
+          padding: padding,
+          children: [
+            // Hero card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [cs.primary, cs.secondary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  ref.watch(clinicByIdProvider(appointment.clinicId))?.name ??
-                      '',
-                  style: TextStyle(
-                      color: cs.onPrimary.withAlpha(200), fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Date & Time
-          _InfoCard(
-            children: [
-              _InfoTile(
-                icon: Icons.calendar_today_outlined,
-                label: 'Date',
-                value: DateFormat('EEEE, MMMM d, y')
-                    .format(appointment.dateTime),
+                borderRadius: BorderRadius.circular(20),
               ),
-              _InfoTile(
-                icon: Icons.access_time_outlined,
-                label: 'Time',
-                value: DateFormat('h:mm a').format(appointment.dateTime),
-              ),
-              if (appointment.rescheduledFrom case final from?)
-                _InfoTile(
-                  icon: Icons.update,
-                  label: 'Moved from',
-                  value: DateFormat('EEE, MMM d · h:mm a').format(from),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Doctor
-          _InfoCard(
-            children: [
-              Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  DoctorAvatar(doctor: appointment.doctor, radius: 28),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Dr. ${appointment.doctor.name}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 16)),
-                      Text(appointment.doctor.specialty,
-                          style: TextStyle(color: cs.onSurfaceVariant)),
-                    ],
+                  StatusBadge(status: appointment.status),
+                  const SizedBox(height: 12),
+                  Text(
+                    appointment.service,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                        color: cs.onPrimary, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    ref.watch(clinicByIdProvider(appointment.clinicId))?.name ??
+                        '',
+                    style: TextStyle(
+                        color: cs.onPrimary.withAlpha(200), fontSize: 13),
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // What the doctor left for the patient. The clinic's clinical notes
-          // are not readable from a patient account at all.
-          if (appointment.patientNote != null) ...[
+            ),
+            const SizedBox(height: 16),
+  
+            // Date & Time
+            _InfoCard(
+              children: [
+                _InfoTile(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Date',
+                  value: DateFormat('EEEE, MMMM d, y')
+                      .format(appointment.dateTime),
+                ),
+                _InfoTile(
+                  icon: Icons.access_time_outlined,
+                  label: 'Time',
+                  value: DateFormat('h:mm a').format(appointment.dateTime),
+                ),
+                if (appointment.rescheduledFrom case final from?)
+                  _InfoTile(
+                    icon: Icons.update,
+                    label: 'Moved from',
+                    value: DateFormat('EEE, MMM d · h:mm a').format(from),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+  
+            // Doctor
             _InfoCard(
               children: [
                 Row(
                   children: [
-                    Icon(Icons.chat_bubble_outline,
-                        size: 16, color: cs.primary),
-                    const SizedBox(width: 6),
-                    Text('Note from your doctor',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurfaceVariant)),
+                    DoctorAvatar(doctor: appointment.doctor, radius: 28),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Dr. ${appointment.doctor.name}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 16)),
+                        Text(appointment.doctor.specialty,
+                            style: TextStyle(color: cs.onSurfaceVariant)),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(appointment.patientNote!),
               ],
             ),
             const SizedBox(height: 12),
-          ],
-
-          VisitBillSection(
-            appointment: appointment,
-            onOpenInvoice: (id) => context.pushInClinic('/bills/$id'),
-          ),
-
-          if (appointment.canReschedule) ...[
-            const SizedBox(height: 8),
-            FilledButton.tonalIcon(
-              onPressed: () =>
-                  showRescheduleSheet(context, appointment, staff: false),
-              icon: const Icon(Icons.edit_calendar_outlined),
-              label: const Text('Reschedule'),
-            ),
-          ],
-
-          // Cancel button
-          if (canCancel) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => _showCancelDialog(context, ref, appointment),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
+  
+            // What the doctor left for the patient. The clinic's clinical notes
+            // are not readable from a patient account at all.
+            if (appointment.patientNote != null) ...[
+              _InfoCard(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.chat_bubble_outline,
+                          size: 16, color: cs.primary),
+                      const SizedBox(width: 6),
+                      Text('Note from your doctor',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(appointment.patientNote!),
+                ],
               ),
-              icon: const Icon(Icons.cancel_outlined),
-              label: const Text('Cancel Appointment'),
+              const SizedBox(height: 12),
+            ],
+  
+            // At a dental clinic: which teeth were treated, what was found, what
+            // comes next — in plain words, without the clinic's notes.
+            VisitDentalSummary(
+              patientId: appointment.patient.id,
+              appointmentId: appointment.id,
+              forPatient: true,
             ),
+  
+            VisitBillSection(
+              appointment: appointment,
+              onOpenInvoice: (id) => context.pushInClinic('/bills/$id'),
+            ),
+  
+            if (appointment.canReschedule && appointment.isUpcoming) ...[
+              const SizedBox(height: 8),
+              AddToCalendarButton(appointment: appointment),
+            ],
+  
+            if (appointment.canReschedule) ...[
+              const SizedBox(height: 8),
+              FilledButton.tonalIcon(
+                onPressed: () =>
+                    showRescheduleSheet(context, appointment, staff: false),
+                icon: const Icon(Icons.edit_calendar_outlined),
+                label: const Text('Reschedule'),
+              ),
+            ],
+  
+            // Cancel button
+            if (canCancel) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _showCancelDialog(context, ref, appointment),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: cs.error,
+                  side: BorderSide(color: cs.error),
+                ),
+                icon: const Icon(Icons.cancel_outlined),
+                label: const Text('Cancel Appointment'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -190,7 +207,10 @@ class AppointmentDetailScreen extends ConsumerWidget {
             child: const Text('Keep'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(ctx);

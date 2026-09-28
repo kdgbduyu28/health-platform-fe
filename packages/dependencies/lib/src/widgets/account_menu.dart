@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/clinic_router.dart';
+
 import '../providers/clinic_provider.dart';
 import '../providers/supabase_providers.dart';
 import 'async_view.dart';
+import 'staff_pin.dart';
 import 'staff_code_screen.dart';
 
-enum _AccountAction { staffCode, changePassword, signOut }
+enum _AccountAction { settings, staffCode, staffPin, changePassword, signOut }
 
-/// The signed-in account's menu, for an app bar: who is signed in, change
-/// password, sign out — and in the doctor and assistant apps, joining another
-/// clinic with a staff code.
+/// The signed-in account's menu, for an app bar: who is signed in, settings,
+/// change password, sign out — and in the doctor and assistant apps, joining another
+/// clinic with a staff code; where patients are registered, the PIN that takes
+/// the tablet back from one.
 class AccountMenuButton extends ConsumerWidget {
   const AccountMenuButton({super.key});
 
@@ -25,10 +29,16 @@ class AccountMenuButton extends ConsumerWidget {
       icon: const Icon(Icons.account_circle_outlined),
       onSelected: (action) {
         switch (action) {
+          case _AccountAction.settings:
+            context.pushInClinic('/preferences');
           case _AccountAction.staffCode:
             Navigator.of(context).push(MaterialPageRoute<void>(
               builder: (_) => const StaffCodeScreen(),
             ));
+          case _AccountAction.staffPin:
+            // Knowing the old PIN is not asked: whoever holds this menu is
+            // signed in as the account already, which is more than a PIN.
+            showSetStaffPinDialog(context);
           case _AccountAction.changePassword:
             showChangePasswordDialog(context);
           case _AccountAction.signOut:
@@ -46,10 +56,19 @@ class AccountMenuButton extends ConsumerWidget {
           ),
         ),
         const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: _AccountAction.settings,
+          child: _MenuRow(Icons.settings_outlined, 'Settings'),
+        ),
         if (app.takesStaffCodes)
           const PopupMenuItem(
             value: _AccountAction.staffCode,
             child: _MenuRow(Icons.add_business_outlined, 'Join another clinic'),
+          ),
+        if (app.registersPatients)
+          const PopupMenuItem(
+            value: _AccountAction.staffPin,
+            child: _MenuRow(Icons.pin_outlined, 'Set tablet PIN'),
           ),
         const PopupMenuItem(
           value: _AccountAction.changePassword,

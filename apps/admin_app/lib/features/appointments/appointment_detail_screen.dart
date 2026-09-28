@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:api_sdk/api_sdk.dart';
 
 class AdminAppointmentDetailScreen extends ConsumerWidget {
@@ -28,171 +27,242 @@ class AdminAppointmentDetailScreen extends ConsumerWidget {
     }
 
     final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
     void openHistory() =>
-        context.pushInClinic('/patients/${appointment.patient.id}');
+        context.openInClinic('/patients/${appointment.patient.id}');
+
+    final header = Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: VisitHeader(
+        appointment: appointment,
+        who: '${appointment.patient.name} · Dr. ${appointment.doctor.name}',
+      ),
+    );
+    final patient = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Patient info
+        _Section(
+          title: 'Patient',
+          action: TextButton.icon(
+            onPressed: openHistory,
+            icon: const Icon(Icons.history, size: 16),
+            label: const Text('History'),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Row2(
+                icon: Icons.person_outline,
+                label: 'Name',
+                value: appointment.patient.name,
+              ),
+              _Row2(
+                icon: Icons.phone_outlined,
+                label: 'Phone',
+                value: appointment.patient.phone,
+              ),
+              _Row2(
+                icon: Icons.email_outlined,
+                label: 'Email',
+                value: appointment.patient.email,
+              ),
+              if (appointment.patient.age != null)
+                _Row2(
+                  icon: Icons.cake_outlined,
+                  label: 'Age',
+                  value: '${appointment.patient.age} years old',
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+    final doctor = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Doctor info
+        _Section(
+          title: 'Doctor',
+          child: Row(
+            children: [
+              DoctorAvatar(doctor: appointment.doctor, radius: 28),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dr. ${appointment.doctor.name}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    appointment.doctor.specialty,
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+    // Full width under the two columns on a wide screen, so the teeth are
+    // big enough to tap on a tablet.
+    final chart = DentalChartSection(
+      patient: appointment.patient,
+      appointment: appointment,
+    );
+    final clinical = <Widget>[
+      // Clinical notes and history — admins are clinicians for this
+      // purpose (the clinic owner is often a doctor).
+      ChartNoteSection(patient: appointment.patient),
+      PreviousVisitsSection(
+        appointment: appointment,
+        onOpenHistory: openHistory,
+        onOpenAppointment: (a) => context.openInClinic('/appointments/${a.id}'),
+      ),
+      VisitNoteSection(appointment: appointment),
+      PatientNoteSection(appointment: appointment),
+    ];
+    final bill = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        VisitBillSection(
+          appointment: appointment,
+          onOpenInvoice: (id) => context.pushInClinic('/billing/$id'),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+    // The visit's next steps. An admin may take any of them.
+    final actions = _actions(context, ref, appointment);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Appointment Details'),
         leading: BackButton(onPressed: () => context.pop()),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [cs.primary, cs.secondary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                StatusBadge(status: appointment.status),
-                const SizedBox(height: 12),
-                Text(appointment.service,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                        color: cs.onPrimary, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(
-                    '${DateFormat('EEE, MMM d').format(appointment.dateTime)}  ·  ${DateFormat('h:mm a').format(appointment.dateTime)}',
-                    style: TextStyle(
-                        color: cs.onPrimary.withAlpha(210), fontSize: 13)),
-                if (appointment.rescheduledFrom case final from?)
-                  Text(
-                      'Moved from ${DateFormat('EEE, MMM d · h:mm a').format(from)}',
-                      style: TextStyle(
-                          color: cs.onPrimary.withAlpha(180), fontSize: 12)),
+      body: CenteredScroll(
+        maxWidth: ContentWidth.detail,
+        builder: (padding) => ListView(
+          padding: padding,
+          children: [
+            SplitColumns(
+              startFlex: 2,
+              endFlex: 3,
+              // On a phone, the page reads top to bottom as before; on a wide
+              // screen the visit and its next steps sit on the left, the
+              // clinical record beside them.
+              narrow: [
+                header,
+                patient,
+                doctor,
+                ...clinical.take(2),
+                chart,
+                ...clinical.skip(2),
+                bill,
+                ...actions,
               ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Patient info
-          _Section(
-            title: 'Patient',
-            action: TextButton.icon(
-              onPressed: openHistory,
-              icon: const Icon(Icons.history, size: 16),
-              label: const Text('History'),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Row2(
-                    icon: Icons.person_outline,
-                    label: 'Name',
-                    value: appointment.patient.name),
-                _Row2(
-                    icon: Icons.phone_outlined,
-                    label: 'Phone',
-                    value: appointment.patient.phone),
-                _Row2(
-                    icon: Icons.email_outlined,
-                    label: 'Email',
-                    value: appointment.patient.email),
-                if (appointment.patient.age != null)
-                  _Row2(
-                      icon: Icons.cake_outlined,
-                      label: 'Age',
-                      value: '${appointment.patient.age} years old'),
+              // The next step right under the header, above the fold on a
+              // tablet held sideways.
+              start: [
+                header,
+                if (actions.isNotEmpty) ...[
+                  ...actions,
+                  const SizedBox(height: 8),
+                ],
+                patient,
+                doctor,
+                bill,
               ],
+              end: clinical,
+              below: [chart],
             ),
-          ),
-          const SizedBox(height: 12),
-
-          // Doctor info
-          _Section(
-            title: 'Doctor',
-            child: Row(
-              children: [
-                DoctorAvatar(doctor: appointment.doctor, radius: 28),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Dr. ${appointment.doctor.name}',
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(appointment.doctor.specialty,
-                        style:
-                            TextStyle(color: cs.onSurfaceVariant)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Clinical notes and history — admins are clinicians for this
-          // purpose (the clinic owner is often a doctor).
-          ChartNoteSection(patient: appointment.patient),
-          PreviousVisitsSection(
-            appointment: appointment,
-            onOpenHistory: openHistory,
-            onOpenAppointment: (a) => context.pushInClinic('/appointments/${a.id}'),
-          ),
-          VisitNoteSection(appointment: appointment),
-          PatientNoteSection(appointment: appointment),
-          const SizedBox(height: 12),
-          VisitBillSection(
-            appointment: appointment,
-            onOpenInvoice: (id) => context.pushInClinic('/billing/$id'),
-          ),
-
-          // The visit's next steps. An admin may take any of them.
-          ..._actions(context, ref, appointment),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   List<Widget> _actions(
-      BuildContext context, WidgetRef ref, Appointment appointment) {
+    BuildContext context,
+    WidgetRef ref,
+    Appointment appointment,
+  ) {
     final a = appointment;
-    Widget step(AppointmentStatus to, IconData icon, String label, String done,
-            {bool thenClose = false}) =>
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: FilledButton.icon(
-            onPressed: () async {
-              final saved =
-                  await changeAppointmentStatus(context, ref, a, to, done: done);
-              if (saved && thenClose && context.mounted) context.pop();
-            },
-            icon: Icon(icon),
-            label: Text(label),
-          ),
-        );
+    Widget step(
+      AppointmentStatus to,
+      IconData icon,
+      String label,
+      String done,
+    ) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: FilledButton.icon(
+        onPressed: () => changeAppointmentStatus(context, ref, a, to, done: done),
+        icon: Icon(icon),
+        label: Text(label),
+      ),
+    );
 
     return [
       if (a.status == AppointmentStatus.pending)
-        step(AppointmentStatus.confirmed, Icons.check_circle_outline,
-            'Confirm appointment', 'Appointment confirmed'),
+        step(
+          AppointmentStatus.confirmed,
+          Icons.check_circle_outline,
+          'Confirm appointment',
+          'Appointment confirmed',
+        ),
       if (a.status == AppointmentStatus.confirmed)
-        step(AppointmentStatus.arrived, Icons.how_to_reg, 'Check in',
-            'Checked in'),
+        step(
+          AppointmentStatus.arrived,
+          Icons.how_to_reg,
+          'Check in',
+          'Checked in',
+        ),
       if (a.status == AppointmentStatus.confirmed ||
           a.status == AppointmentStatus.arrived)
-        step(AppointmentStatus.inConsultation, Icons.play_arrow,
-            'Start consultation', 'Consultation started'),
-      if (a.status == AppointmentStatus.inConsultation)
-        step(AppointmentStatus.completed, Icons.task_alt, 'Complete visit',
-            'Visit completed',
-            thenClose: true),
+        step(
+          AppointmentStatus.inConsultation,
+          Icons.play_arrow,
+          'Start consultation',
+          'Consultation started',
+        ),
+      // Marking done bills the services performed; the bill opens next.
+      if (a.status == AppointmentStatus.arrived ||
+          a.status == AppointmentStatus.inConsultation ||
+          a.status == AppointmentStatus.completed)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: a.status == AppointmentStatus.completed
+              ? OutlinedButton.icon(
+                  onPressed: () => showCompleteVisitSheet(context, ref, a),
+                  icon: const Icon(Icons.checklist),
+                  label: const Text('Services done'),
+                )
+              : FilledButton.icon(
+                  onPressed: () async {
+                    final id = await showCompleteVisitSheet(context, ref, a);
+                    if (id != null && id.isNotEmpty && context.mounted) {
+                      context.pushInClinic('/billing/$id');
+                    }
+                  },
+                  icon: const Icon(Icons.task_alt),
+                  label: const Text('Mark done'),
+                ),
+        ),
       if (a.status == AppointmentStatus.confirmed &&
           !a.dateTime.isAfter(DateTime.now()))
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: OutlinedButton.icon(
             onPressed: () => changeAppointmentStatus(
-                context, ref, a, AppointmentStatus.noShow,
-                done: 'Marked as a no-show'),
+              context,
+              ref,
+              a,
+              AppointmentStatus.noShow,
+              done: 'Marked as a no-show',
+            ),
             icon: const Icon(Icons.person_off_outlined),
             label: const Text('Mark as no-show'),
           ),
@@ -210,8 +280,11 @@ class AdminAppointmentDetailScreen extends ConsumerWidget {
         OutlinedButton.icon(
           onPressed: () async {
             final cancelled = await confirmAndCancelAppointment(
-                context, ref, a,
-                who: a.patient.name);
+              context,
+              ref,
+              a,
+              who: a.patient.name,
+            );
             if (cancelled && context.mounted) context.pop();
           },
           style: OutlinedButton.styleFrom(
@@ -246,11 +319,14 @@ class _Section extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(title,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurfaceVariant,
-                      fontSize: 12)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurfaceVariant,
+                  fontSize: 12,
+                ),
+              ),
               const Spacer(),
               if (action != null) action!,
             ],
@@ -278,11 +354,25 @@ class _Row2 extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: cs.primary),
           const SizedBox(width: 8),
-          Text('$label: ',
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+          Text(
+            '$label: ',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
           Expanded(
-              child: Text(value,
-                  style: const TextStyle(fontWeight: FontWeight.w500))),
+            child: value.trim().isEmpty
+                ? Text(
+                    'Not on file',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                      fontSize: 13,
+                    ),
+                  )
+                : SelectableText(
+                    value,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+          ),
         ],
       ),
     );

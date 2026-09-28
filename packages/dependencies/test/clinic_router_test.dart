@@ -118,6 +118,7 @@ Future<Harness> pumpApp(
   List<Clinic> visible = const [],
   List<Patient> charts = const [],
   List<ClinicMembership> memberships = const [],
+  AppPreferences? prefs,
 }) async {
   fakeUserProvider = NotifierProvider<FakeUser, String?>(
       () => FakeUser(signedIn ? 'u1' : null));
@@ -132,6 +133,9 @@ Future<Harness> pumpApp(
     myMembershipsProvider.overrideWith((ref) async => memberships),
     myStaffRequestsProvider.overrideWith((ref) async => const []),
     clinicPageProvider.overrideWith((ref, slug) async => publicPages[slug]),
+    intakeProvider.overrideWith((ref, id) async => null),
+    // Each test starts on a fresh device.
+    preferencesProvider.overrideWithValue(prefs ?? AppPreferences.memory()),
   ]);
   addTearDown(container.dispose);
 
@@ -145,13 +149,14 @@ Future<Harness> pumpApp(
   return harness;
 }
 
-Patient chartAt(String clinicId) => Patient(
+Patient chartAt(String clinicId, {bool? hasIntake}) => Patient(
       id: 'chart-$clinicId',
       personId: 'person-1',
       clinicId: clinicId,
       name: 'Juan dela Cruz',
       phone: '0917',
       email: '',
+      hasIntake: hasIntake,
     );
 
 ClinicMembership staffAt(String clinicId, AppRole role,
@@ -217,6 +222,32 @@ void main() {
       expect(await h.go('/'), '/dtouchdental/home');
       expect(find.text('HOME'), findsOneWidget);
       expect(h.container.read(currentClinicIdProvider), 'dt');
+    });
+
+    testWidgets('/ returns to the clinic they used last', (tester) async {
+      final prefs = AppPreferences.memory();
+      final h = await pumpApp(tester,
+          app: AppRole.patient,
+          signedIn: true,
+          visible: [dtouch, other],
+          charts: [chartAt('dt'), chartAt('ot')],
+          prefs: prefs);
+      expect(await h.go('/'), '/dtouchdental/home');
+      await h.go('/brightsmile/home');
+      expect(prefs.lastClinicSlug(AppRole.patient), 'brightsmile');
+      expect(await h.go('/'), '/brightsmile/home');
+    });
+
+    testWidgets('…but not to one they no longer belong to', (tester) async {
+      final prefs = AppPreferences.memory();
+      await prefs.setLastClinicSlug(AppRole.patient, 'brightsmile');
+      final h = await pumpApp(tester,
+          app: AppRole.patient,
+          signedIn: true,
+          visible: [dtouch],
+          charts: [chartAt('dt')],
+          prefs: prefs);
+      expect(await h.go('/'), '/dtouchdental/home');
     });
 
     testWidgets('signing in follows ?next=', (tester) async {
@@ -378,6 +409,103 @@ void main() {
       expect(h.container.read(currentClinicIdProvider), 'ot');
       expect(await h.go('/dtouchdental/dashboard'), '/dtouchdental/dashboard');
       expect(h.container.read(currentClinicIdProvider), 'dt');
+    });
+  });
+
+  group('patient information form', () {
+    testWidgets('a patient who never filled it in is sent there first',
+        (tester) async {
+      final h = await pumpApp(tester,
+          app: AppRole.patient,
+          signedIn: true,
+          visible: [dtouch],
+          charts: [chartAt('dt', hasIntake: false)]);
+      expect(await h.go('/'), '/dtouchdental/intake');
+      expect(find.text('Welcome to D-Touch Dental Clinic'), findsOneWidget);
+      expect(await h.go('/dtouchdental/book'), '/dtouchdental/intake');
+    });
+
+    testWidgets('…and once they have, the app opens as usual', (tester) async {
+      final h = await pumpApp(tester,
+          app: AppRole.patient,
+          signedIn: true,
+          visible: [dtouch],
+          charts: [chartAt('dt', hasIntake: true)]);
+      expect(await h.go('/'), '/dtouchdental/home');
+      // Still there to update from the profile.
+      expect(await h.go('/dtouchdental/intake'), '/dtouchdental/intake');
+      expect(find.text('My information'), findsOneWidget);
+    });
+
+    testWidgets('the form is per clinic', (tester) async {
+      final h = await pumpApp(tester,
+          app: AppRole.patient,
+          signedIn: true,
+          visible: [dtouch, other],
+          charts: [
+            chartAt('dt', hasIntake: true),
+            chartAt('ot', hasIntake: false),
+          ]);
+      expect(await h.go('/dtouchdental/home'), '/dtouchdental/home');
+      expect(await h.go('/brightsmile/home'), '/brightsmile/intake');
+    });
+  });
+
+  group('the tablet handed to a patient', () {
+    Future<Harness> handedOver(WidgetTester tester, {AppRole app = AppRole.assistant}) async {
+      final prefs = AppPreferences.memory();
+      await prefs.setKioskSession(
+          app, '{"slug":"dtouchdental","patient_id":null,"submitted":false}');
+      return pumpApp(tester,
+          app: app,
+          signedIn: true,
+          visible: [dtouch, other],
+          memberships: [staffAt('dt', app), staffAt('ot', app)],
+          prefs: prefs);
+    }
+
+    testWidgets('every URL leads back to the form', (tester) async {
+      final h = await handedOver(tester);
+      expect(await h.go('/'), '/dtouchdental/kiosk');
+      expect(await h.go('/dtouchdental/patients'), '/dtouchdental/kiosk');
+      expect(await h.go('/brightsmile/check-in'), '/dtouchdental/kiosk');
+      expect(find.text('About you'), findsOneWidget);
+      // No clinic switcher and no way back.
+      expect(find.byType(ClinicTitle), findsNothing);
+      expect(find.byType(BackButton), findsNothing);
+    });
+
+    testWidgets('…in the admin app too', (tester) async {
+      final h = await handedOver(tester, app: AppRole.admin);
+      expect(await h.go('/dtouchdental/dashboard'), '/dtouchdental/kiosk');
+    });
+
+    testWidgets('ending it opens the app again', (tester) async {
+      final h = await handedOver(tester);
+      h.container.read(kioskProvider.notifier).end();
+      await h.settle();
+      expect(await h.go('/dtouchdental/patients'), '/dtouchdental/patients');
+      // A stale link to the tablet screen goes home.
+      expect(await h.go('/dtouchdental/kiosk'), '/dtouchdental/check-in');
+    });
+
+    testWidgets('signing out ends it', (tester) async {
+      final h = await handedOver(tester);
+      await h.signOut();
+      expect(h.container.read(kioskProvider), isNull);
+      expect(h.container.read(preferencesProvider).kioskSession(AppRole.assistant),
+          isNull);
+      await h.signIn();
+      expect(await h.go('/'), '/dtouchdental/check-in');
+    });
+
+    testWidgets('a doctor app has no tablet mode', (tester) async {
+      final h = await pumpApp(tester,
+          app: AppRole.doctor,
+          signedIn: true,
+          visible: [dtouch],
+          memberships: [staffAt('dt', AppRole.doctor)]);
+      expect(await h.go('/dtouchdental/kiosk'), isNot('/dtouchdental/kiosk'));
     });
   });
 }

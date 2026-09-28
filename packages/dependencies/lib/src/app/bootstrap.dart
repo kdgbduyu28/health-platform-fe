@@ -3,6 +3,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
+import '../providers/preferences_provider.dart';
 
 /// Starts Supabase before `runApp`. Every app's `main()` must await this —
 /// `Supabase.instance.client` throws if it is read first.
@@ -15,6 +16,7 @@ Future<void> initializeHealthPlatform() async {
   // serves the app at any path. A no-op off the web.
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
+  AppPreferences.shared = await AppPreferences.load();
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,

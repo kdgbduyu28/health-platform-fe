@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../models/app_role.dart';
 import '../providers/clinic_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../providers/supabase_providers.dart';
 import '../theme/brand.dart';
 import '../theme/clinic_theme.dart';
@@ -34,13 +35,50 @@ class ClinicAppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final clinic = ref.watch(routeBrandClinicProvider);
+    final textScale = ref.watch(textSizeProvider).scale;
     return MaterialApp.router(
       title: clinic?.name ?? appName,
       theme: buildClinicTheme(clinic),
+      darkTheme: buildClinicTheme(clinic, brightness: Brightness.dark),
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: ref.watch(router),
       debugShowCheckedModeBanner: false,
+      // On top of the device's own text size, never instead of it.
+      builder: textScale == 1.0
+          ? null
+          : (context, child) {
+              final mq = MediaQuery.of(context);
+              return MediaQuery(
+                data: mq.copyWith(
+                  textScaler: _ScaledTextScaler(mq.textScaler, textScale),
+                ),
+                child: child!,
+              );
+            },
     );
   }
+}
+
+/// The device's text scaling, then [factor] on top.
+class _ScaledTextScaler extends TextScaler {
+  const _ScaledTextScaler(this.base, this.factor);
+
+  final TextScaler base;
+  final double factor;
+
+  @override
+  double scale(double fontSize) => base.scale(fontSize) * factor;
+
+  @override
+  // ignore: deprecated_member_use
+  double get textScaleFactor => base.textScaleFactor * factor;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _ScaledTextScaler && other.base == base && other.factor == factor;
+
+  @override
+  int get hashCode => Object.hash(base, factor);
 }
 
 /// Wraps every page under `/:clinic`, and makes [slug] the current clinic.

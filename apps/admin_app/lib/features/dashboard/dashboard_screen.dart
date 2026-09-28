@@ -9,20 +9,22 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final todayAsync = ref.watch(todayAppointmentsProvider);
-    final allClinicAsync = ref.watch(clinicAppointmentsProvider);
-    final patientsAsync = ref.watch(patientsProvider);
+    final upcomingAsync = ref.watch(upcomingAppointmentsProvider);
+    final patientCount = ref.watch(patientCountProvider).value;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
     final todayAppts = todayAsync.value ?? const <Appointment>[];
-    final allClinic = allClinicAsync.value ?? const <Appointment>[];
+    final upcoming = upcomingAsync.value ?? const <Appointment>[];
 
-    final pending =
-        todayAppts.where((a) => a.status == AppointmentStatus.pending).length;
+    final pending = todayAppts
+        .where((a) => a.status == AppointmentStatus.pending)
+        .length;
     // Checked in and waiting, or with a doctor.
     final inClinic = todayAppts.where((a) => a.status.isOnSite).length;
-    final completed =
-        todayAppts.where((a) => a.status == AppointmentStatus.completed).length;
+    final completed = todayAppts
+        .where((a) => a.status == AppointmentStatus.completed)
+        .length;
 
     return Scaffold(
       body: CustomScrollView(
@@ -31,104 +33,122 @@ class DashboardScreen extends ConsumerWidget {
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Admin Dashboard',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: cs.onSurfaceVariant)),
+                // The date on the line above, so it is not in a chip too.
+                Text(
+                  DateFormat('EEEE, MMMM d').format(DateTime.now()),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
                 ClinicTitle(
-                    style: theme.textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                  page: 'Dashboard',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    DateFormat('MMM d, y').format(DateTime.now()),
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onPrimaryContainer),
-                  ),
-                ),
-              ),
               const NotificationsButton(),
               const AccountMenuButton(),
               const SizedBox(width: 8),
             ],
           ),
-          SliverPadding(
+          SliverCentered(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
             sliver: SliverList.list(
               children: [
                 // Stats row
-                Text("Today's Overview",
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _StatCard(
-                        label: 'Total',
-                        value: todayAppts.length,
-                        icon: Icons.event,
-                        color: cs.primary),
-                    const SizedBox(width: 8),
-                    _StatCard(
-                        label: 'Pending',
-                        value: pending,
-                        icon: Icons.schedule,
-                        color: AppointmentStatus.pending.color),
-                    const SizedBox(width: 8),
-                    _StatCard(
-                        label: 'In clinic',
-                        value: inClinic,
-                        icon: Icons.chair_outlined,
-                        color: AppointmentStatus.arrived.color),
-                    const SizedBox(width: 8),
-                    _StatCard(
-                        label: 'Done',
-                        value: completed,
-                        icon: Icons.task_alt,
-                        color: AppointmentStatus.completed.color),
-                  ],
+                Text(
+                  "Today's Overview",
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(height: 24),
-
-                // Quick stats – all time
-                Row(
-                  children: [
-                    Expanded(
-                      child: _BigStatCard(
-                        label: 'Total Patients',
-                        value: patientsAsync.value?.length ?? 0,
-                        icon: Icons.group_outlined,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _BigStatCard(
-                        label: 'All Appointments',
-                        value: allClinic.length,
-                        icon: Icons.calendar_month_outlined,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, box) {
+                    final today = Row(
+                      children: [
+                        _StatCard(
+                          label: 'Total',
+                          value: todayAppts.length,
+                          icon: Icons.event,
+                          color: cs.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        _StatCard(
+                          label: 'Pending',
+                          value: pending,
+                          icon: Icons.schedule,
+                          color: AppointmentStatus.pending.color.readableIn(context),
+                        ),
+                        const SizedBox(width: 8),
+                        _StatCard(
+                          label: 'In clinic',
+                          value: inClinic,
+                          icon: Icons.chair_outlined,
+                          color: AppointmentStatus.arrived.color.readableIn(context),
+                        ),
+                        const SizedBox(width: 8),
+                        _StatCard(
+                          label: 'Done',
+                          value: completed,
+                          icon: Icons.task_alt,
+                          color: AppointmentStatus.completed.color.readableIn(context),
+                        ),
+                      ],
+                    );
+                    // The clinic at large
+                    final overall = Row(
+                      children: [
+                        Expanded(
+                          child: _BigStatCard(
+                            label: 'Total Patients',
+                            value: patientCount ?? 0,
+                            icon: Icons.group_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _BigStatCard(
+                            label: 'Upcoming',
+                            value: upcoming.length,
+                            icon: Icons.calendar_month_outlined,
+                          ),
+                        ),
+                      ],
+                    );
+                    // Room for both on one line: today on the left, the
+                    // clinic at large on the right.
+                    if (box.maxWidth >= Breakpoints.twoPane) {
+                      return IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(flex: 3, child: today),
+                            const SizedBox(width: 12),
+                            Expanded(flex: 2, child: overall),
+                          ],
+                        ),
+                      );
+                    }
+                    return Column(
+                      children: [today, const SizedBox(height: 24), overall],
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
 
                 // Today's timeline
                 Row(
                   children: [
-                    Text("Today's Schedule",
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    Text(
+                      "Today's Schedule",
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const Spacer(),
                     TextButton(
                       onPressed: () => context.goInClinic('/schedule'),
@@ -147,18 +167,20 @@ class DashboardScreen extends ConsumerWidget {
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(
-                        child: Text('No appointments scheduled today.')),
+                      child: Text('No appointments scheduled today.'),
+                    ),
                   )
                 else
-                  ...todayAppts.map(
-                    (a) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: AppointmentCard(
-                        appointment: a,
-                        onTap: () => context.pushInClinic('/appointments/${a.id}'),
-                        showPatient: true,
-                      ),
-                    ),
+                  CardColumns(
+                    children: [
+                      for (final a in todayAppts)
+                        AppointmentCard(
+                          appointment: a,
+                          onTap: () =>
+                              context.pushInClinic('/appointments/${a.id}'),
+                          showPatient: true,
+                        ),
+                    ],
                   ),
               ],
             ),
@@ -170,11 +192,12 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard(
-      {required this.label,
-      required this.value,
-      required this.icon,
-      required this.color});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   final String label;
   final int value;
@@ -195,14 +218,19 @@ class _StatCard extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(height: 4),
-            Text('$value',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: color)),
-            Text(label,
-                style: TextStyle(fontSize: 10, color: color),
-                textAlign: TextAlign.center),
+            Text(
+              '$value',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: color,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(fontSize: 10, color: color),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -211,8 +239,11 @@ class _StatCard extends StatelessWidget {
 }
 
 class _BigStatCard extends StatelessWidget {
-  const _BigStatCard(
-      {required this.label, required this.value, required this.icon});
+  const _BigStatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
   final String label;
   final int value;
@@ -242,12 +273,17 @@ class _BigStatCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$value',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 22)),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 11, color: cs.onSurfaceVariant)),
+              Text(
+                '$value',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                ),
+              ),
+              Text(
+                label,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
             ],
           ),
         ],

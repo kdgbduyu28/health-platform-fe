@@ -35,8 +35,10 @@ class _MyAppointmentsScreenState
         a.status.holdsTime && (a.dateTime.isAfter(now) || a.status.isOnSite);
     final upcoming = all.where(isUpcoming).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    // Recent past visits are in the loaded window; older ones page in below.
     final past = all.where((a) => !isUpcoming(a)).toList()
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    final me = ref.watch(myPatientProvider).value;
 
     return Scaffold(
       appBar: AppBar(
@@ -45,7 +47,7 @@ class _MyAppointmentsScreenState
           controller: _tabs,
           tabs: [
             Tab(text: 'Upcoming (${upcoming.length})'),
-            Tab(text: 'Past (${past.length})'),
+            const Tab(text: 'Past'),
           ],
         ),
       ),
@@ -68,10 +70,15 @@ class _MyAppointmentsScreenState
                 emptyMessage: 'No upcoming appointments',
                 emptySubtitle: 'Tap + to book one',
               ),
-              _AppointmentList(
-                appointments: past,
+              PastAppointmentsList(
+                recent: past,
+                query: (doctorId: null, patientId: me?.id),
                 emptyMessage: 'No past appointments',
                 emptySubtitle: 'Your appointment history will appear here',
+                itemBuilder: (context, a) => AppointmentCard(
+                  appointment: a,
+                  onTap: () => context.pushInClinic('/appointments/${a.id}'),
+                ),
               ),
             ],
           ),
@@ -112,17 +119,21 @@ class _AppointmentList extends StatelessWidget {
         ),
       );
     }
-    return ListView.separated(
+    return CenteredScroll(
+      maxWidth: ContentWidth.list,
       padding: const EdgeInsets.all(16),
-      itemCount: appointments.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, i) {
-        final a = appointments[i];
-        return AppointmentCard(
-          appointment: a,
-          onTap: () => context.pushInClinic('/appointments/${a.id}'),
-        );
-      },
+      builder: (padding) => ListView.separated(
+        padding: padding,
+        itemCount: appointments.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (context, i) {
+          final a = appointments[i];
+          return AppointmentCard(
+            appointment: a,
+            onTap: () => context.pushInClinic('/appointments/${a.id}'),
+          );
+        },
+      ),
     );
   }
 }

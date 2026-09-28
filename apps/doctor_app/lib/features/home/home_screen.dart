@@ -26,6 +26,8 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
     final doctorAsync = ref.watch(currentDoctorProvider);
     final todayAsync = ref.watch(myDoctorTodayProvider);
     final allAsync = ref.watch(myDoctorAppointmentsProvider);
+    final board =
+        ref.watch(appointmentViewProvider) == AppointmentView.board;
 
     // The app bar shows tab counts, so it needs values before the lists below
     // can render. Empty is the right stand-in while loading; the tab bodies
@@ -33,10 +35,12 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
     final doctor = doctorAsync.value;
     final todayAppts = todayAsync.value ?? const <Appointment>[];
     final upcoming = (allAsync.value ?? const <Appointment>[])
-        .where((a) =>
-            a.dateTime.isAfter(DateTime.now()) &&
-            !a.isToday &&
-            a.status.holdsTime)
+        .where(
+          (a) =>
+              a.dateTime.isAfter(DateTime.now()) &&
+              !a.isToday &&
+              a.status.holdsTime,
+        )
         .toList();
     // Newest first: the visit a doctor looks back at is usually the last one.
     final past = (allAsync.value ?? const <Appointment>[])
@@ -58,20 +62,27 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                 // Doctors may practise at several clinics; the clinic line is
                 // also where they switch between them.
                 ClinicTitle(
+                  page: 'Schedule',
                   markSize: 20,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: cs.onSurfaceVariant),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
                 ),
-                Text(doctor == null ? 'Doctor' : 'Dr. ${doctor.name}',
-                    style: theme.textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  doctor == null ? 'Doctor' : 'Dr. ${doctor.name}',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             actions: [
               Container(
                 margin: const EdgeInsets.only(right: 16),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(20),
@@ -79,19 +90,24 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(clinic?.icon ?? Icons.local_hospital_outlined,
-                        size: 16, color: cs.onPrimaryContainer),
+                    Icon(
+                      clinic?.icon ?? Icons.local_hospital_outlined,
+                      size: 16,
+                      color: cs.onPrimaryContainer,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       doctor?.specialty ?? clinic?.typeName ?? '',
                       style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onPrimaryContainer),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onPrimaryContainer,
+                      ),
                     ),
                   ],
                 ),
               ),
+              const AppointmentViewToggle(),
               const NotificationsButton(),
               const AccountMenuButton(),
               const SizedBox(width: 8),
@@ -111,25 +127,31 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
             // Today's stats banner
             if (_tabs.index == 0)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 color: cs.surfaceContainerLow,
-                child: Row(
-                  children: [
-                    for (final (i, (label, status)) in const [
-                      ('Waiting', AppointmentStatus.arrived),
-                      ('With you', AppointmentStatus.inConsultation),
-                      ('Expected', AppointmentStatus.confirmed),
-                      ('Done', AppointmentStatus.completed),
-                    ].indexed) ...[
-                      if (i > 0) const SizedBox(width: 12),
-                      _MiniStat(
-                        label: label,
-                        value: todayAppts.where((a) => a.status == status).length,
-                        color: status.color,
-                      ),
+                child: Centered(
+                  child: Row(
+                    children: [
+                      for (final (i, (label, status)) in const [
+                        ('Waiting', AppointmentStatus.arrived),
+                        ('With you', AppointmentStatus.inConsultation),
+                        ('Expected', AppointmentStatus.confirmed),
+                        ('Done', AppointmentStatus.completed),
+                      ].indexed) ...[
+                        if (i > 0) const SizedBox(width: 12),
+                        _MiniStat(
+                          label: label,
+                          value: todayAppts
+                              .where((a) => a.status == status)
+                              .length,
+                          color: status.color.readableIn(context),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             Expanded(
@@ -139,7 +161,13 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                   AsyncView(
                     value: todayAsync,
                     onRetry: () => ref.invalidate(appointmentsProvider),
-                    builder: (today) => _TodayQueue(appointments: today),
+                    // Only this doctor's visits: see myDoctorTodayProvider.
+                    builder: (today) => board && today.isNotEmpty
+                        ? AppointmentBoard(
+                            appointments: today,
+                            showDoctor: false,
+                          )
+                        : _TodayQueue(appointments: today),
                   ),
                   AsyncView(
                     value: allAsync,
@@ -153,10 +181,14 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
                   AsyncView(
                     value: allAsync,
                     onRetry: () => ref.invalidate(appointmentsProvider),
-                    builder: (_) => _AppointmentListTab(
-                      appointments: past,
+                    // Recent visits from the loaded window, then older
+                    // ones a page at a time.
+                    builder: (_) => PastAppointmentsList(
+                      recent: past,
+                      query: (doctorId: doctor?.id, patientId: null),
                       emptyMessage: 'No past appointments',
-                      showTime: false,
+                      itemBuilder: (_, a) =>
+                          _DoctorApptCard(appointment: a, showTime: false),
                     ),
                   ),
                 ],
@@ -170,8 +202,11 @@ class _DoctorHomeScreenState extends ConsumerState<DoctorHomeScreen>
 }
 
 class _MiniStat extends StatelessWidget {
-  const _MiniStat(
-      {required this.label, required this.value, required this.color});
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
   final String label;
   final int value;
   final Color color;
@@ -180,11 +215,15 @@ class _MiniStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text('$value',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 20, color: color)),
-        Text(label,
-            style: TextStyle(fontSize: 11, color: color)),
+        Text(
+          '$value',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+            color: color,
+          ),
+        ),
+        Text(label, style: TextStyle(fontSize: 11, color: color)),
       ],
     );
   }
@@ -208,24 +247,29 @@ class _AppointmentListTab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.event_available,
-                size: 56,
-                color: Theme.of(context).colorScheme.outline),
+            Icon(
+              Icons.event_available,
+              size: 56,
+              color: Theme.of(context).colorScheme.outline,
+            ),
             const SizedBox(height: 16),
-            Text(emptyMessage,
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(emptyMessage, style: Theme.of(context).textTheme.titleMedium),
           ],
         ),
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: appointments.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, i) {
-        final a = appointments[i];
-        return _DoctorApptCard(appointment: a, showTime: showTime);
-      },
+    return CenteredScroll(
+      builder: (padding) => ListView(
+        padding: padding,
+        children: [
+          CardColumns(
+            children: [
+              for (final a in appointments)
+                _DoctorApptCard(appointment: a, showTime: showTime),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -255,12 +299,11 @@ class _DoctorApptCard extends StatelessWidget {
       shape: highlight
           ? RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: appointment.status.color, width: 2),
+              side: BorderSide(color: appointment.status.color.readableIn(context), width: 2),
             )
           : null,
       child: InkWell(
-        onTap: () =>
-            context.pushInClinic('/appointments/${appointment.id}'),
+        onTap: () => context.pushInClinic('/appointments/${appointment.id}'),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -281,15 +324,17 @@ class _DoctorApptCard extends StatelessWidget {
                       Text(
                         DateFormat('h:mm').format(appointment.dateTime),
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: cs.onPrimaryContainer),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: cs.onPrimaryContainer,
+                        ),
                       ),
                       Text(
                         DateFormat('a').format(appointment.dateTime),
                         style: TextStyle(
-                            fontSize: 11,
-                            color: cs.onPrimaryContainer),
+                          fontSize: 11,
+                          color: cs.onPrimaryContainer,
+                        ),
                       ),
                     ],
                   ),
@@ -305,34 +350,33 @@ class _DoctorApptCard extends StatelessWidget {
                           child: Text(
                             appointment.patient.name,
                             style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        StatusBadge(
-                            status: appointment.status, small: true),
+                        StatusBadge(status: appointment.status, small: true),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(appointment.service,
-                        style: TextStyle(color: cs.onSurfaceVariant)),
+                    Text(
+                      appointment.service,
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
                     if (!showTime)
                       Text(
                         DateFormat('EEE, MMM d').format(appointment.dateTime),
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: cs.primary),
+                        style: TextStyle(fontSize: 12, color: cs.primary),
                       ),
                     if (appointment.status == AppointmentStatus.arrived &&
                         appointment.arrivedAt != null)
                       Text(
                         'Arrived ${DateFormat.jm().format(appointment.arrivedAt!)}',
                         style: TextStyle(
-                            fontSize: 12, color: appointment.status.color),
+                          fontSize: 12,
+                          color: appointment.status.color.readableIn(context),
+                        ),
                       ),
-                    if (action != null) ...[
-                      const SizedBox(height: 8),
-                      action!,
-                    ],
+                    if (action != null) ...[const SizedBox(height: 8), action!],
                   ],
                 ),
               ),
@@ -354,15 +398,19 @@ class _TodayQueue extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    List<Appointment> where(bool Function(AppointmentStatus) test) =>
-        [...appointments.where((a) => test(a.status))];
+    List<Appointment> where(bool Function(AppointmentStatus) test) => [
+      ...appointments.where((a) => test(a.status)),
+    ];
 
     final withMe = where((s) => s == AppointmentStatus.inConsultation);
     final waiting = where((s) => s == AppointmentStatus.arrived)
-      ..sort((a, b) => (a.arrivedAt ?? a.dateTime)
-          .compareTo(b.arrivedAt ?? b.dateTime));
-    final later = where((s) =>
-        s == AppointmentStatus.pending || s == AppointmentStatus.confirmed);
+      ..sort(
+        (a, b) =>
+            (a.arrivedAt ?? a.dateTime).compareTo(b.arrivedAt ?? b.dateTime),
+      );
+    final later = where(
+      (s) => s == AppointmentStatus.pending || s == AppointmentStatus.confirmed,
+    );
     final done = where((s) => !s.isOpen);
 
     if (appointments.isEmpty) {
@@ -374,57 +422,69 @@ class _TodayQueue extends ConsumerWidget {
     }
 
     Widget start(Appointment a) => FilledButton.tonalIcon(
-          onPressed: () => changeAppointmentStatus(
-              context, ref, a, AppointmentStatus.inConsultation,
-              done: 'Consultation with ${a.patient.name} started'),
-          icon: const Icon(Icons.play_arrow, size: 18),
-          label: const Text('Start consultation'),
-        );
+      onPressed: () => changeAppointmentStatus(
+        context,
+        ref,
+        a,
+        AppointmentStatus.inConsultation,
+        done: 'Consultation with ${a.patient.name} started',
+      ),
+      icon: const Icon(Icons.play_arrow, size: 18),
+      label: const Text('Start consultation'),
+    );
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (withMe.isNotEmpty) ...[
-          const _QueueHeader('With you now'),
-          for (final a in withMe)
-            _DoctorApptCard(
-              appointment: a,
-              showTime: true,
-              highlight: true,
-              action: FilledButton.icon(
-                onPressed: () => changeAppointmentStatus(
-                    context, ref, a, AppointmentStatus.completed,
-                    done: 'Visit completed'),
-                icon: const Icon(Icons.task_alt, size: 18),
-                label: const Text('Complete visit'),
-              ),
+    final now = [
+      if (withMe.isNotEmpty) ...[
+        const _QueueHeader('With you now'),
+        for (final a in withMe)
+          _DoctorApptCard(
+            appointment: a,
+            showTime: true,
+            highlight: true,
+            action: FilledButton.icon(
+              onPressed: () => showCompleteVisitSheet(context, ref, a),
+              icon: const Icon(Icons.task_alt, size: 18),
+              label: const Text('Mark done'),
             ),
-        ],
-        if (waiting.isNotEmpty) ...[
-          _QueueHeader('Waiting room (${waiting.length})'),
-          for (final (i, a) in waiting.indexed)
-            _DoctorApptCard(
-              appointment: a,
-              showTime: true,
-              highlight: i == 0 && withMe.isEmpty,
-              action: start(a),
-            ),
-        ],
-        if (later.isNotEmpty) ...[
-          const _QueueHeader('Later today'),
-          for (final a in later)
-            _DoctorApptCard(
-              appointment: a,
-              showTime: true,
-              // Clinics with nobody at the desk start straight from here.
-              action: a.status == AppointmentStatus.confirmed ? start(a) : null,
-            ),
-        ],
-        if (done.isNotEmpty) ...[
-          const _QueueHeader('Done today'),
-          for (final a in done) _DoctorApptCard(appointment: a, showTime: true),
-        ],
+          ),
       ],
+      if (waiting.isNotEmpty) ...[
+        _QueueHeader('Waiting room (${waiting.length})'),
+        for (final (i, a) in waiting.indexed)
+          _DoctorApptCard(
+            appointment: a,
+            showTime: true,
+            highlight: i == 0 && withMe.isEmpty,
+            action: start(a),
+          ),
+      ],
+    ];
+    final rest = [
+      if (later.isNotEmpty) ...[
+        const _QueueHeader('Later today'),
+        for (final a in later)
+          _DoctorApptCard(
+            appointment: a,
+            showTime: true,
+            // Clinics with nobody at the desk start straight from here.
+            action: a.status == AppointmentStatus.confirmed ? start(a) : null,
+          ),
+      ],
+      if (done.isNotEmpty) ...[
+        const _QueueHeader('Done today'),
+        for (final a in done) _DoctorApptCard(appointment: a, showTime: true),
+      ],
+    ];
+
+    // On a wide screen, who is here now sits beside the rest of the day, so
+    // the next patient to call is never scrolled out of sight.
+    return CenteredScroll(
+      builder: (padding) => ListView(
+        padding: padding,
+        children: now.isEmpty || rest.isEmpty
+            ? [...now, ...rest]
+            : [SplitColumns(start: now, end: rest)],
+      ),
     );
   }
 }
@@ -440,10 +500,9 @@ class _QueueHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
       child: Text(
         text,
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
-            ?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }

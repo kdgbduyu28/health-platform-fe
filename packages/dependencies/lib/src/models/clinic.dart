@@ -13,6 +13,7 @@ class Clinic {
     required this.typeSlug,
     required this.typeName,
     this.typeIconName,
+    this.chartKind,
     this.timezone = 'Asia/Manila',
     this.seedColor,
     this.logoUrl,
@@ -21,6 +22,7 @@ class Clinic {
     this.contactPhone,
     this.address,
     this.isActive = true,
+    this.recallMonths = 6,
   });
 
   final String id;
@@ -32,6 +34,10 @@ class Clinic {
   final String typeSlug;
   final String typeName;
   final String? typeIconName;
+
+  /// The structured chart the vertical keeps (`clinic_types.chart_kind`):
+  /// `dental` for the odontogram, null for notes only.
+  final String? chartKind;
 
   final String timezone;
 
@@ -50,9 +56,14 @@ class Clinic {
   final String? address;
   final bool isActive;
 
+  /// How long after a patient's last completed visit, with nothing booked,
+  /// the patient list marks them due for recall.
+  final int recallMonths;
+
   /// Expects the vertical embedded:
   ///
-  ///   clinics?select=*,clinic_type:clinic_types(display_name,icon_name)
+  ///   clinics?select=*,clinic_type:clinic_types(display_name,icon_name,
+  ///                                             chart_kind)
   ///
   /// Without the embed the slug stands in for the display name, so a missing
   /// join degrades to "dental" rather than a crash.
@@ -66,6 +77,7 @@ class Clinic {
       typeSlug: typeSlug,
       typeName: type?['display_name'] as String? ?? typeSlug,
       typeIconName: type?['icon_name'] as String?,
+      chartKind: type?['chart_kind'] as String?,
       timezone: json['timezone'] as String? ?? 'Asia/Manila',
       seedColor: parseHexColor(json['seed_color'] as String?),
       logoUrl: json['logo_url'] as String?,
@@ -74,10 +86,14 @@ class Clinic {
       contactPhone: json['contact_phone'] as String?,
       address: json['address'] as String?,
       isActive: json['is_active'] as bool? ?? true,
+      recallMonths: (json['recall_months'] as num?)?.toInt() ?? 6,
     );
   }
 
   IconData get icon => clinicTypeIcon(typeIconName);
+
+  /// Whether this clinic charts teeth.
+  bool get isDental => chartKind == 'dental';
 }
 
 /// `#RRGGBB` → [Color]. Anything else is null, so a malformed value in the

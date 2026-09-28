@@ -52,33 +52,37 @@ class ClosuresScreen extends ConsumerWidget {
                   ),
                 ),
               )
-            : ListView.separated(
+            : CenteredScroll(
+                maxWidth: ContentWidth.list,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                itemCount: entries.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final t = entries[i];
-                  final cs = Theme.of(context).colorScheme;
-                  return Card(
-                    child: ListTile(
-                      leading: Icon(
-                        t.isClosure ? Icons.store_mall_directory_outlined : Icons.beach_access_outlined,
-                        color: t.isClosure ? cs.error : cs.primary,
+                builder: (padding) => ListView.separated(
+                  padding: padding,
+                  itemCount: entries.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final t = entries[i];
+                    final cs = Theme.of(context).colorScheme;
+                    return Card(
+                      child: ListTile(
+                        leading: Icon(
+                          t.isClosure ? Icons.store_mall_directory_outlined : Icons.beach_access_outlined,
+                          color: t.isClosure ? cs.error : cs.primary,
+                        ),
+                        title: Text(who(t),
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text([
+                          formatDayRange(t.startsOn, t.endsOn),
+                          if (t.reason != null) t.reason!,
+                        ].join(' · ')),
+                        trailing: IconButton(
+                          tooltip: 'Remove',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _remove(context, ref, t, who(t)),
+                        ),
                       ),
-                      title: Text(who(t),
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text([
-                        formatDayRange(t.startsOn, t.endsOn),
-                        if (t.reason != null) t.reason!,
-                      ].join(' · ')),
-                      trailing: IconButton(
-                        tooltip: 'Remove',
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _remove(context, ref, t, who(t)),
-                      ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
       ),
     );

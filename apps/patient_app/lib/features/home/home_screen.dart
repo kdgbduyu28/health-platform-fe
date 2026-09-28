@@ -61,7 +61,8 @@ class HomeScreen extends ConsumerWidget {
               ),
             ],
           ),
-          SliverPadding(
+          SliverCentered(
+            maxWidth: ContentWidth.list,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
             sliver: SliverAsyncView(
               value: upcomingAsync,
@@ -84,6 +85,10 @@ class HomeScreen extends ConsumerWidget {
                     icon: const Icon(Icons.add),
                     label: const Text('Book Appointment'),
                   ),
+                  if (ref.watch(clinicChartsTeethProvider)) ...[
+                    const SizedBox(height: 16),
+                    const _MyTeethCard(),
+                  ],
                   if (upcoming.length > 1) ...[
                     const SizedBox(height: 24),
                     Text(
@@ -239,6 +244,38 @@ class _EmptyCard extends StatelessWidget {
           Text('Book your first appointment below',
               style: TextStyle(color: cs.outline)),
         ],
+      ),
+    );
+  }
+}
+
+/// At a dental clinic: the way to the patient's own chart, with what the
+/// dentist has recommended next.
+class _MyTeethCard extends ConsumerWidget {
+  const _MyTeethCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final me = ref.watch(myPatientProvider).value;
+    final plan = me == null
+        ? const <DentalEntry>[]
+        : ref.watch(dentalChartProvider(me.id)).value?.plan ??
+            const <DentalEntry>[];
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        onTap: () => context.pushInClinic('/teeth'),
+        leading: CircleAvatar(
+          backgroundColor: cs.primaryContainer,
+          child: Icon(Icons.grid_view_rounded, color: cs.onPrimaryContainer),
+        ),
+        title: const Text('My teeth',
+            style: TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(plan.isEmpty
+            ? 'Your dental chart and treatment history'
+            : '${plan.length} recommended treatment${plan.length == 1 ? '' : 's'}'),
+        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }

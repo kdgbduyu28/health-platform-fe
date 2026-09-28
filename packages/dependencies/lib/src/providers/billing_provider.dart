@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/app_role.dart';
 import '../models/invoice.dart';
+import '../models/ledger.dart';
 import 'catalog_provider.dart';
 import 'clinic_provider.dart';
 import 'clinical_provider.dart';
@@ -57,8 +58,29 @@ final billingSummaryProvider =
       .fetchBillingSummary(clinicId, from: r.from, to: r.to);
 });
 
-/// After any change to a bill, every view of bills refetches.
+final ledgerSummaryProvider =
+    FutureProvider.autoDispose.family<LedgerSummary?, BillingRange>((ref, r) async {
+  final clinicId = ref.watch(currentClinicIdProvider);
+  if (clinicId == null) return null;
+  return ref
+      .watch(healthRepositoryProvider)
+      .fetchLedgerSummary(clinicId, from: r.from, to: r.to);
+});
+
+final ledgerEntriesProvider =
+    FutureProvider.autoDispose.family<List<LedgerEntry>, BillingRange>((ref, r) async {
+  final clinicId = ref.watch(currentClinicIdProvider);
+  if (clinicId == null) return const [];
+  return ref
+      .watch(healthRepositoryProvider)
+      .fetchLedgerEntries(clinicId, from: r.from, to: r.to);
+});
+
+/// After any change to a bill, a payment or an expense, every view of them
+/// refetches.
 void invalidateBilling(WidgetRef ref) {
+  ref.invalidate(ledgerSummaryProvider);
+  ref.invalidate(ledgerEntriesProvider);
   ref.invalidate(clinicInvoicesProvider);
   ref.invalidate(invoiceProvider);
   ref.invalidate(appointmentInvoiceProvider);

@@ -40,55 +40,59 @@ class _BookAppointmentScreenState
         children: [
           _StepIndicator(step: _step),
           Expanded(
-            child: SingleChildScrollView(
+            child: CenteredScroll(
+              maxWidth: ContentWidth.form,
               padding: const EdgeInsets.all(16),
-              child: switch (_step) {
-                0 => AsyncView(
-                    value: servicesAsync,
-                    onRetry: () => ref.invalidate(servicesProvider),
-                    builder: (services) => _ServiceStep(
-                      services: services,
-                      selected: _service,
-                      onSelect: (s) => setState(() {
-                        _service = s;
-                        _step = 1;
+              builder: (padding) => SingleChildScrollView(
+                padding: padding,
+                child: switch (_step) {
+                  0 => AsyncView(
+                      value: servicesAsync,
+                      onRetry: () => ref.invalidate(servicesProvider),
+                      builder: (services) => _ServiceStep(
+                        services: services,
+                        selected: _service,
+                        onSelect: (s) => setState(() {
+                          _service = s;
+                          _step = 1;
+                        }),
+                      ),
+                    ),
+                  1 => AsyncView(
+                      value: doctorsAsync,
+                      onRetry: () => ref.invalidate(doctorsProvider),
+                      builder: (doctors) => _DoctorStep(
+                        doctors: doctors,
+                        selected: _doctor,
+                        onSelect: (d) => setState(() {
+                          _doctor = d;
+                          _step = 2;
+                        }),
+                      ),
+                    ),
+                  2 => _DateTimeStep(
+                      doctor: _doctor,
+                      service: _service,
+                      selectedDate: _date,
+                      selectedSlot: _slot,
+                      onDateSelected: (d) => setState(() {
+                        _date = d;
+                        _slot = null;
+                      }),
+                      onSlotSelected: (s) => setState(() {
+                        _slot = s;
+                        _step = 3;
                       }),
                     ),
-                  ),
-                1 => AsyncView(
-                    value: doctorsAsync,
-                    onRetry: () => ref.invalidate(doctorsProvider),
-                    builder: (doctors) => _DoctorStep(
-                      doctors: doctors,
-                      selected: _doctor,
-                      onSelect: (d) => setState(() {
-                        _doctor = d;
-                        _step = 2;
-                      }),
+                  _ => _ConfirmStep(
+                      service: _service,
+                      doctor: _doctor,
+                      slot: _slot,
+                      busy: _busy,
+                      onConfirm: _confirm,
                     ),
-                  ),
-                2 => _DateTimeStep(
-                    doctor: _doctor,
-                    service: _service,
-                    selectedDate: _date,
-                    selectedSlot: _slot,
-                    onDateSelected: (d) => setState(() {
-                      _date = d;
-                      _slot = null;
-                    }),
-                    onSlotSelected: (s) => setState(() {
-                      _slot = s;
-                      _step = 3;
-                    }),
-                  ),
-                _ => _ConfirmStep(
-                    service: _service,
-                    doctor: _doctor,
-                    slot: _slot,
-                    busy: _busy,
-                    onConfirm: _confirm,
-                  ),
-              },
+                },
+              ),
             ),
           ),
         ],

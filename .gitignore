@@ -11,3 +11,6 @@
 .dart_tool/extension_discovery/
 
 # Build output is already covered by each app's own .gitignore.
+
+# Wrangler (Cloudflare Pages deploys) keeps a local cache here.
+.wrangler/

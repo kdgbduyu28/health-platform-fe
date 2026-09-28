@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../app/adaptive_layout.dart';
 import '../app/clinic_router.dart';
 import '../models/clinic.dart';
 import '../providers/clinic_provider.dart';
@@ -12,10 +13,17 @@ import '../theme/brand.dart';
 /// When the user belongs to more than one clinic in this app, the title is
 /// also the switcher: tap it to pick another clinic, and the whole app —
 /// data and theme — follows.
+///
+/// With [page], a desktop — whose side rail already names the clinic, and
+/// switches it — shows [page] here instead, so the name is not there twice.
 class ClinicTitle extends ConsumerWidget {
-  const ClinicTitle({super.key, this.style, this.markSize = 28});
+  const ClinicTitle({super.key, this.style, this.markSize = 28, this.page});
 
   final TextStyle? style;
+
+  /// This tab's name, shown instead of the clinic's beside a rail that names
+  /// the clinic.
+  final String? page;
 
   /// Keep this at or under the text's line height where the title shares a
   /// collapsed app bar with a second line.
@@ -23,6 +31,9 @@ class ClinicTitle extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (page != null && ClinicNavScaffold.showsClinicName(context)) {
+      return Text(page!, style: style, overflow: TextOverflow.ellipsis);
+    }
     final clinic = ref.watch(currentClinicProvider).value;
     final clinics = ref.watch(myClinicsProvider).value ?? const <Clinic>[];
     final canSwitch = clinics.length > 1;

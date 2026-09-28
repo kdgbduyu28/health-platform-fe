@@ -15,6 +15,13 @@ class ClinicPageTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Beside a rail that already names the clinic (and switches it), the
+    // tab's name is the title.
+    if (ClinicNavScaffold.showsClinicName(context)) {
+      return Text(label,
+          style: theme.textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.w600));
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,

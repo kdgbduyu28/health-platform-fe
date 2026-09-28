@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/doctor.dart';
@@ -22,12 +23,118 @@ final servicesProvider = FutureProvider<List<Service>>((ref) async {
   return ref.watch(healthRepositoryProvider).fetchServices(clinicId);
 });
 
-/// The charts held at the current clinic — the staff apps' patient list.
-final patientsProvider = FutureProvider<List<Patient>>((ref) async {
+/// Charts at the current clinic matching what was typed — the first few, for
+/// a picker. Searched in the database, so the clinic's whole patient list is
+/// never downloaded to find one person.
+///
+/// Waits a moment before asking, so typing a name sends one request rather
+/// than one per letter: a keystroke replaces this provider before the wait is
+/// over.
+final patientSearchProvider = FutureProvider.autoDispose
+    .family<List<Patient>, String>((ref, query) async {
   final clinicId = ref.watch(currentClinicIdProvider);
+  final repo = ref.watch(healthRepositoryProvider);
   if (clinicId == null) return const [];
-  return ref.watch(healthRepositoryProvider).fetchPatients(clinicId);
+  await Future<void>.delayed(const Duration(milliseconds: 250));
+  if (!ref.mounted) return const [];
+  final page = await repo.searchPatients(clinicId,
+      query: query.trim().isEmpty ? null : query, limit: 8);
+  return [for (final l in page.patients) l.patient];
 });
+
+/// How many charts the current clinic holds.
+final patientCountProvider = FutureProvider<int>((ref) async {
+  final clinicId = ref.watch(currentClinicIdProvider);
+  if (clinicId == null) return 0;
+  final page =
+      await ref.watch(healthRepositoryProvider).searchPatients(clinicId, limit: 1);
+  return page.total;
+});
+
+/// What the patient list is showing: the search, the remark filters, the
+/// sort, and which page.
+@immutable
+class PatientTableQuery {
+  const PatientTableQuery({
+    this.search = '',
+    this.filters = const {},
+    this.sort = PatientSort.name,
+    this.descending = false,
+    this.page = 0,
+    this.pageSize = 25,
+  });
+
+  final String search;
+  final Set<PatientFlag> filters;
+  final PatientSort sort;
+  final bool descending;
+
+  /// Zero-based.
+  final int page;
+  final int pageSize;
+
+  PatientTableQuery copyWith({
+    String? search,
+    Set<PatientFlag>? filters,
+    PatientSort? sort,
+    bool? descending,
+    int? page,
+    int? pageSize,
+  }) =>
+      PatientTableQuery(
+        search: search ?? this.search,
+        filters: filters ?? this.filters,
+        sort: sort ?? this.sort,
+        descending: descending ?? this.descending,
+        page: page ?? this.page,
+        pageSize: pageSize ?? this.pageSize,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is PatientTableQuery &&
+      other.search == search &&
+      setEquals(other.filters, filters) &&
+      other.sort == sort &&
+      other.descending == descending &&
+      other.page == page &&
+      other.pageSize == pageSize;
+
+  @override
+  int get hashCode => Object.hash(search,
+      Object.hashAllUnordered(filters), sort, descending, page, pageSize);
+}
+
+/// One page of the patient list. Searching waits a moment, like
+/// [patientSearchProvider], so typing a name sends one request.
+final patientTableProvider = FutureProvider.autoDispose
+    .family<PatientPage, PatientTableQuery>((ref, q) async {
+  final clinicId = ref.watch(currentClinicIdProvider);
+  final repo = ref.watch(healthRepositoryProvider);
+  if (clinicId == null) return const PatientPage(patients: [], total: 0);
+  final search = q.search.trim();
+  if (search.isNotEmpty) {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (!ref.mounted) return const PatientPage(patients: [], total: 0);
+  }
+  return repo.searchPatients(
+    clinicId,
+    query: search.isEmpty ? null : search,
+    offset: q.page * q.pageSize,
+    limit: q.pageSize,
+    filters: q.filters,
+    sort: q.sort,
+    descending: q.descending,
+  );
+});
+
+/// After registering a patient, every list of them is stale.
+void invalidatePatientLists(WidgetRef ref) {
+  ref
+    ..invalidate(patientSearchProvider)
+    ..invalidate(patientCountProvider)
+    ..invalidate(patientTableProvider);
+}
 
 /// The signed-in patient's chart at the current clinic. Null for staff.
 final myPatientProvider = Provider<AsyncValue<Patient?>>((ref) {

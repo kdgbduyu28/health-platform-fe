@@ -7,10 +7,14 @@ import '../models/appointment_status.dart';
 import '../models/clinic.dart';
 import '../models/clinic_page.dart';
 import '../models/clinical_note.dart';
+import '../models/data_import.dart';
+import '../models/dental_chart.dart';
 import '../models/doctor.dart';
 import '../models/invoice.dart';
+import '../models/ledger.dart';
 import '../models/membership.dart';
 import '../models/patient.dart';
+import '../models/patient_intake.dart';
 import '../models/profile.dart';
 import '../models/service.dart';
 import '../models/staff_invite.dart';
@@ -34,7 +38,7 @@ class HealthRepository {
   final Future<void> Function()? _beforeSignOut;
 
   static const _clinicSelect =
-      '*, clinic_type:clinic_types(display_name, icon_name)';
+      '*, clinic_type:clinic_types(display_name, icon_name, chart_kind)';
 
   static const _patientSelect = '*, person:persons(*)';
 
@@ -106,7 +110,7 @@ class HealthRepository {
     if (person == null) return const [];
     final rows = await _db
         .from('patients')
-        .select(_patientSelect)
+        .select('$_patientSelect, intake:patient_intakes(updated_at)')
         .eq('person_id', person['id'] as String);
     return rows.map((r) => Patient.fromJson(r)).toList();
   }
@@ -120,11 +124,67 @@ class HealthRepository {
     return rows.map((r) => Doctor.fromJson(r)).toList();
   }
 
-  Future<List<Appointment>> fetchAppointments() async {
+  /// The appointments the signed-in user may see from [since] on — the
+  /// working set every screen filters. Older visits are read a page at a time
+  /// with [fetchPastAppointments], so a clinic's years of history never load
+  /// up front.
+  Future<List<Appointment>> fetchAppointments({required DateTime since}) async {
     final rows = await _db
         .from('appointments')
         .select(_appointmentSelect)
+        .gte('scheduled_at', since.toUtc().toIso8601String())
         .order('scheduled_at', ascending: true);
+    return rows.map((r) => Appointment.fromJson(r)).toList();
+  }
+
+  /// One appointment, however old. Null if it does not exist or RLS hides it.
+  Future<Appointment?> fetchAppointment(String id) async {
+    final row = await _db
+        .from('appointments')
+        .select(_appointmentSelect)
+        .eq('id', id)
+        .maybeSingle();
+    return row == null ? null : Appointment.fromJson(row);
+  }
+
+  /// Visits at [clinicId] that start in [from, to), oldest first — one
+  /// calendar page, however far back. RLS still decides whose.
+  Future<List<Appointment>> fetchAppointmentsBetween({
+    required String clinicId,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final rows = await _db
+        .from('appointments')
+        .select(_appointmentSelect)
+        .eq('clinic_id', clinicId)
+        .gte('scheduled_at', from.toUtc().toIso8601String())
+        .lt('scheduled_at', to.toUtc().toIso8601String())
+        .order('scheduled_at', ascending: true);
+    return rows.map((r) => Appointment.fromJson(r)).toList();
+  }
+
+  /// Visits at [clinicId] before [before], newest first: rows [offset] to
+  /// [offset] + [limit] − 1. Narrowed to one doctor or one chart when given.
+  Future<List<Appointment>> fetchPastAppointments({
+    required String clinicId,
+    required DateTime before,
+    String? doctorId,
+    String? patientId,
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    var q = _db
+        .from('appointments')
+        .select(_appointmentSelect)
+        .eq('clinic_id', clinicId)
+        .lt('scheduled_at', before.toUtc().toIso8601String());
+    if (doctorId != null) q = q.eq('doctor_id', doctorId);
+    if (patientId != null) q = q.eq('patient_id', patientId);
+    final rows = await q
+        .order('scheduled_at', ascending: false)
+        .order('id')
+        .range(offset, offset + limit - 1);
     return rows.map((r) => Appointment.fromJson(r)).toList();
   }
 
@@ -200,15 +260,31 @@ class HealthRepository {
     return rows.map((r) => TimeOff.fromJson(r)).toList();
   }
 
-  /// The charts held at [clinicId], sorted by name. Sorted here because
-  /// ordering by an embedded column orders the embed, not the charts.
-  Future<List<Patient>> fetchPatients(String clinicId) async {
-    final rows = await _db
-        .from('patients')
-        .select(_patientSelect)
-        .eq('clinic_id', clinicId);
-    return rows.map((r) => Patient.fromJson(r)).toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  /// One page of the charts at [clinicId] matching [query] (name, email, or
+  /// phone however typed) and carrying every one of [filters], sorted by
+  /// [sort] (name by default), with each chart's visits, balance and remarks.
+  /// Searched in the database: see `public.search_patients`.
+  Future<PatientPage> searchPatients(
+    String clinicId, {
+    String? query,
+    int offset = 0,
+    int limit = 30,
+    Set<PatientFlag> filters = const {},
+    PatientSort sort = PatientSort.name,
+    bool descending = false,
+  }) async {
+    final row = await _db.rpc('search_patients', params: {
+      'p_clinic_id': clinicId,
+      'p_query': query,
+      'p_limit': limit,
+      'p_offset': offset,
+      // Only when asked for, so the pickers keep working on a database
+      // without them.
+      if (filters.isNotEmpty) 'p_filters': [for (final f in filters) f.wire],
+      if (sort != PatientSort.name) 'p_sort': sort.wire,
+      if (descending) 'p_desc': true,
+    });
+    return PatientPage.fromJson(row as Map<String, dynamic>);
   }
 
   /// One chart, with its person. Null if it does not exist or RLS hides it.
@@ -258,6 +334,26 @@ class HealthRepository {
     return ClinicalNote.fromNullableJson(row);
   }
 
+  /// Every entry on a chart's dental chart, notes included. Staff at the
+  /// clinic only; a patient reads theirs with [fetchMyDentalChart].
+  Future<List<DentalEntry>> fetchDentalEntries(String patientId) async {
+    final rows = await _db
+        .from('dental_chart_entries')
+        .select()
+        .eq('patient_id', patientId)
+        .order('created_at');
+    return rows.map((r) => DentalEntry.fromJson(r)).toList();
+  }
+
+  /// The signed-in patient's own dental chart, without the clinic's notes.
+  Future<List<DentalEntry>> fetchMyDentalChart(String patientId) async {
+    final rows = await _db.rpc('patient_dental_chart',
+        params: {'p_patient_id': patientId}) as List<dynamic>;
+    return [
+      for (final r in rows) DentalEntry.fromJson(r as Map<String, dynamic>),
+    ];
+  }
+
   /// Everyone on staff at [clinicId], with their name and email. Readable by
   /// the clinic's admins.
   Future<List<ClinicMembership>> fetchStaff(String clinicId) async {
@@ -294,6 +390,57 @@ class HealthRepository {
       'scheduled_at': scheduledAt.toUtc().toIso8601String(),
       'status': status.wire,
     });
+  }
+
+  /// Books a visit that already happened but was never entered, returning
+  /// its id. It goes in confirmed, the furthest the database lets a new visit
+  /// start; [completeRecordedVisit] takes it the rest of the way. Staff
+  /// bookings notify nobody, and nothing stops a past time for staff.
+  Future<String> recordPastVisit({
+    required String clinicId,
+    required String patientId,
+    required String doctorId,
+    required String serviceName,
+    required DateTime scheduledAt,
+    String? serviceId,
+  }) async {
+    final row = await _db
+        .from('appointments')
+        .insert({
+          'clinic_id': clinicId,
+          'patient_id': patientId,
+          'doctor_id': doctorId,
+          'service_id': serviceId,
+          'service_name': serviceName,
+          'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+          'status': AppointmentStatus.confirmed.wire,
+        })
+        .select('id')
+        .single();
+    return row['id'] as String;
+  }
+
+  /// Walks a recorded visit from confirmed to completed. Anyone on staff may.
+  /// The completed time is stamped as now.
+  Future<void> completeRecordedVisit(String appointmentId) =>
+      completeVisit(appointmentId);
+
+  /// Marks a visit done with the services performed — service id → how many
+  /// times — and puts them on its draft bill at the catalogue price. Returns
+  /// the visit's bill, or null when it has none (no services, no bill).
+  /// Called again on a completed visit, it corrects the services.
+  Future<String?> completeVisit(
+    String appointmentId, {
+    Map<String, int> services = const {},
+  }) async {
+    final id = await _db.rpc('complete_visit', params: {
+      'p_appointment_id': appointmentId,
+      'p_services': [
+        for (final e in services.entries)
+          {'service_id': e.key, 'quantity': e.value},
+      ],
+    });
+    return id as String?;
   }
 
   Future<void> updateStatus(String appointmentId, AppointmentStatus status) =>
@@ -348,6 +495,38 @@ class HealthRepository {
         onConflict: 'appointment_id',
       );
 
+  /// Charts one thing about one tooth. Doctors and admins only; the database
+  /// also refuses work marked done at a visit the patient did not attend.
+  Future<void> addDentalEntry({
+    required String clinicId,
+    required String patientId,
+    required int tooth,
+    required DentalCode code,
+    required DentalEntryStatus status,
+    Set<ToothSurface> surfaces = const {},
+    String? appointmentId,
+    String? note,
+  }) =>
+      _db.from('dental_chart_entries').insert({
+        'clinic_id': clinicId,
+        'patient_id': patientId,
+        'appointment_id': appointmentId,
+        'tooth': tooth,
+        'code': code.wire,
+        'status': status.wire,
+        'surfaces': [for (final s in surfaces) s.wire],
+        'note': (note?.trim().isEmpty ?? true) ? null : note!.trim(),
+      });
+
+  /// Marks planned work done at [appointmentId].
+  Future<void> completeDentalEntry(String entryId, String appointmentId) => _db
+      .from('dental_chart_entries')
+      .update({'status': DentalEntryStatus.done.wire, 'appointment_id': appointmentId})
+      .eq('id', entryId);
+
+  Future<void> deleteDentalEntry(String entryId) =>
+      _db.from('dental_chart_entries').delete().eq('id', entryId);
+
   /// Registers a walk-in and books their appointment in one transaction,
   /// returning the new appointment id.
   ///
@@ -376,6 +555,154 @@ class HealthRepository {
       'p_email': email,
     });
     return id as String;
+  }
+
+  // ── Patient information form ──────────────────────────────────────────────
+
+  /// The form on file for one chart, or null if it was never filled in.
+  Future<PatientIntake?> fetchIntake(String patientId) async {
+    final row = await _db
+        .from('patient_intakes')
+        .select()
+        .eq('patient_id', patientId)
+        .maybeSingle();
+    return row == null ? null : PatientIntake.fromJson(row);
+  }
+
+  /// A new patient at [clinicId], with no visit booked: their person, their
+  /// chart and (when given) their form in one transaction. Returns the chart
+  /// id. Front desk and admins only; the database checks.
+  Future<String> registerPatient({
+    required String clinicId,
+    required IntakeSubmission form,
+    required IntakeSource source,
+  }) async {
+    final id = await _db.rpc('register_patient', params: {
+      'p_clinic_id': clinicId,
+      'p_person': form.person,
+      'p_intake': form.intake,
+      'p_source': source.wire,
+    });
+    return id as String;
+  }
+
+  /// Saves the form for an existing chart — the patient's own, or one at the
+  /// caller's clinic — updating the person's details with it.
+  Future<void> savePatientIntake({
+    required String patientId,
+    required IntakeSubmission form,
+    required IntakeSource source,
+  }) =>
+      _db.rpc('save_patient_intake', params: {
+        'p_patient_id': patientId,
+        'p_person': form.person,
+        'p_intake': form.intake,
+        'p_source': source.wire,
+      });
+
+  // ── Staff PIN (taking the front desk tablet back) ────────────────────────
+
+  Future<bool> hasStaffPin() async =>
+      await _db.rpc('has_staff_pin') as bool? ?? false;
+
+  Future<void> setStaffPin(String pin) =>
+      _db.rpc('set_staff_pin', params: {'p_pin': pin});
+
+  /// True for the signed-in account's PIN. Throws once too many wrong ones
+  /// have been tried, with the wait in the message.
+  Future<bool> verifyStaffPin(String pin) async =>
+      await _db.rpc('verify_staff_pin', params: {'p_pin': pin}) as bool? ??
+      false;
+
+  // ── Patients, visits and dental charts in and out as CSV ─────────────────
+
+  /// Starts recording an import of [fileName] at [clinicId]; the rows then go
+  /// in with [importRows]. Returns the batch id.
+  Future<String> startImport({
+    required String clinicId,
+    required String fileName,
+    ImportKind kind = ImportKind.patients,
+  }) async =>
+      await _db.rpc('start_import', params: {
+        'p_clinic_id': clinicId,
+        'p_kind': kind.wire,
+        'p_file_name': fileName,
+      }) as String;
+
+  /// Imports up to 500 rows (the JSON the `read…Row` functions make) of
+  /// [kind] into [clinicId]: `import_patients`, `import_visits` or
+  /// `import_dental`. Without [batchId] it is a dry run: every row is
+  /// checked by the database and nothing is kept.
+  Future<List<ImportRowResult>> importRows({
+    required ImportKind kind,
+    required String clinicId,
+    required List<Map<String, dynamic>> rows,
+    String? batchId,
+  }) async {
+    final out = await _db.rpc('import_${kind.wire}', params: {
+      'p_clinic_id': clinicId,
+      'p_rows': rows,
+      'p_batch_id': batchId,
+    }) as List<dynamic>;
+    return [
+      for (final r in out) ImportRowResult.fromJson(r as Map<String, dynamic>),
+    ];
+  }
+
+  /// The clinic's imports, newest first.
+  Future<List<ImportBatch>> fetchImportBatches(String clinicId) async {
+    final rows = await _db
+        .from('import_batches')
+        .select()
+        .eq('clinic_id', clinicId)
+        .order('created_at', ascending: false)
+        .limit(20);
+    return [for (final r in rows) ImportBatch.fromJson(r)];
+  }
+
+  /// Removes what an import added, if nothing has happened to it since.
+  /// Throws, with the reason, otherwise.
+  Future<UndoImportResult> undoImport(String batchId) async {
+    final out = await _db.rpc('undo_import', params: {'p_batch_id': batchId})
+        as Map<String, dynamic>;
+    return UndoImportResult(
+      removed: out['removed'] as int? ?? 0,
+      keptUpdates: out['kept_updates'] as int? ?? 0,
+    );
+  }
+
+  /// One page of [clinicId]'s [kind] for a file. The first page puts the
+  /// export on the clinic's record. Clinical notes come back only for
+  /// doctors and admins.
+  Future<List<Map<String, dynamic>>> exportRows(
+    ImportKind kind,
+    String clinicId, {
+    int limit = 500,
+    int offset = 0,
+  }) async {
+    final out = await _db.rpc('export_${kind.wire}', params: {
+      'p_clinic_id': clinicId,
+      'p_limit': limit,
+      'p_offset': offset,
+    }) as List<dynamic>;
+    return [for (final r in out) r as Map<String, dynamic>];
+  }
+
+  /// A doctor who has left, for the visits they saw: on the roster but
+  /// inactive, so nobody books them. Admins. Returns the roster id.
+  Future<String> addFormerDoctor(String clinicId, String name) async {
+    final row = await _db
+        .from('doctors')
+        .insert({
+          'clinic_id': clinicId,
+          'full_name': name,
+          'specialty': '',
+          'available_time_slots': <String>[],
+          'is_active': false,
+        })
+        .select('id')
+        .single();
+    return row['id'] as String;
   }
 
   // ── Roster, catalogue and time off (admins; a doctor their own schedule) ──
@@ -612,6 +939,67 @@ class HealthRepository {
     return BillingSummary.fromJson(row as Map<String, dynamic>);
   }
 
+  // ── Prices, expenses and the ledger ───────────────────────────────────────
+  // 20260930120000_payments_ledger. The front desk and admins.
+
+  /// Null clears the price.
+  Future<void> setServicePrice(String serviceId, double? price) => _db.rpc(
+      'set_service_price',
+      params: {'p_service_id': serviceId, 'p_price': price});
+
+  Future<LedgerSummary> fetchLedgerSummary(
+    String clinicId, {
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final row = await _db.rpc('ledger_summary', params: {
+      'p_clinic_id': clinicId,
+      'p_from': _date(from),
+      'p_to': _date(to),
+    });
+    return LedgerSummary.fromJson(row as Map<String, dynamic>);
+  }
+
+  /// Payments and expenses in the range, newest first.
+  Future<List<LedgerEntry>> fetchLedgerEntries(
+    String clinicId, {
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final rows = await _db.rpc('ledger_entries', params: {
+      'p_clinic_id': clinicId,
+      'p_from': _date(from),
+      'p_to': _date(to),
+    }) as List<dynamic>;
+    return [
+      for (final r in rows) LedgerEntry.fromJson(r as Map<String, dynamic>),
+    ];
+  }
+
+  Future<void> addExpense({
+    required String clinicId,
+    required DateTime spentOn,
+    required String category,
+    required double amount,
+    required PaymentMethod method,
+    String? description,
+    String? reference,
+  }) =>
+      _db.from('expenses').insert({
+        'clinic_id': clinicId,
+        'spent_on': _date(spentOn),
+        'category': category,
+        'amount': amount,
+        'method': method.wire,
+        'description': description,
+        'reference': reference,
+      });
+
+  /// Admins only.
+  Future<void> voidExpense(String expenseId, String reason) => _db.rpc(
+      'void_expense',
+      params: {'p_expense_id': expenseId, 'p_reason': reason});
+
   // ── Notifications ─────────────────────────────────────────────────────────
 
   /// The signed-in account's inbox, newest first, live over Realtime. RLS
@@ -660,6 +1048,37 @@ class HealthRepository {
 
   Future<void> deletePushSubscription(String endpoint) => _db
       .rpc('delete_push_subscription', params: {'p_endpoint': endpoint});
+
+  /// The notification kinds the signed-in account switched off in [app].
+  /// The database skips writing those (see 20260928120000 in the backend).
+  Future<Set<String>> fetchNotificationMutes(AppRole app) async {
+    final uid = _uid;
+    if (uid == null) return const {};
+    final rows = await _db
+        .from('notification_mutes')
+        .select('kind')
+        .eq('profile_id', uid)
+        .eq('app', app.wire);
+    return {for (final r in rows) r['kind'] as String};
+  }
+
+  /// Switches [kind] on or off for the signed-in account in [app].
+  Future<void> setNotificationMuted(AppRole app, String kind, bool muted) {
+    final uid = _uid;
+    if (uid == null) throw StateError('Sign in first.');
+    final table = _db.from('notification_mutes');
+    if (muted) {
+      return table.upsert(
+        {'profile_id': uid, 'app': app.wire, 'kind': kind},
+        ignoreDuplicates: true,
+      );
+    }
+    return table
+        .delete()
+        .eq('profile_id', uid)
+        .eq('app', app.wire)
+        .eq('kind', kind);
+  }
 
   // ── Onboarding ────────────────────────────────────────────────────────────
 

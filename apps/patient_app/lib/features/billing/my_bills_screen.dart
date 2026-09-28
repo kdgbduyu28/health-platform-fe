@@ -36,28 +36,32 @@ class MyBillsScreen extends ConsumerWidget {
               .fold<double>(0, (sum, b) => sum + b.balance);
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(myInvoicesProvider),
-            child: ListView(
+            child: CenteredScroll(
+              maxWidth: ContentWidth.list,
               padding: const EdgeInsets.all(12),
-              children: [
-                if (owed > 0)
-                  Card(
-                    color: cs.errorContainer,
-                    child: ListTile(
-                      leading: Icon(Icons.info_outline, color: cs.onErrorContainer),
-                      title: Text('${formatPeso(owed)} to settle',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: cs.onErrorContainer)),
-                      subtitle: Text('Pay at the clinic\'s front desk.',
-                          style: TextStyle(color: cs.onErrorContainer)),
+              builder: (padding) => ListView(
+                padding: padding,
+                children: [
+                  if (owed > 0)
+                    Card(
+                      color: cs.errorContainer,
+                      child: ListTile(
+                        leading: Icon(Icons.info_outline, color: cs.onErrorContainer),
+                        title: Text('${formatPeso(owed)} to settle',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: cs.onErrorContainer)),
+                        subtitle: Text('Pay at the clinic\'s front desk.',
+                            style: TextStyle(color: cs.onErrorContainer)),
+                      ),
                     ),
-                  ),
-                for (final b in bills)
-                  InvoiceTile(
-                    invoice: b,
-                    onTap: () => context.pushInClinic('/bills/${b.id}'),
-                  ),
-              ],
+                  for (final b in bills)
+                    InvoiceTile(
+                      invoice: b,
+                      onTap: () => context.pushInClinic('/bills/${b.id}'),
+                    ),
+                ],
+              ),
             ),
           );
         },

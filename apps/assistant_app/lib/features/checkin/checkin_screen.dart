@@ -31,6 +31,8 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
 
     int count(AppointmentStatus s) =>
         todayAppts.where((a) => a.status == s).length;
+    final board =
+        ref.watch(appointmentViewProvider) == AppointmentView.board;
 
     return Scaffold(
       body: CustomScrollView(
@@ -43,17 +45,22 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(color: cs.onSurfaceVariant)),
                 ClinicTitle(
+                    page: 'Check-in',
                     style: theme.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
               ],
             ),
             actions: const [
+              AppointmentViewToggle(),
               NotificationsButton(),
               AccountMenuButton(),
               SizedBox(width: 8),
             ],
           ),
-          SliverToBoxAdapter(
+          SliverCentered(
+            maxWidth: ContentWidth.wide + 32,
+            padding: EdgeInsets.zero,
+            sliver: SliverToBoxAdapter(
             child: Column(
               children: [
                 // Stats
@@ -72,7 +79,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                         _StatPill(
                             label: label,
                             value: count(status),
-                            color: status.color),
+                            color: status.color.readableIn(context)),
                       ],
                     ],
                   ),
@@ -97,6 +104,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                 ),
               ],
             ),
+          ),
           ),
           // "No appointments today" is only true once the data has actually
           // arrived — while loading or after a failure it would be a lie.
@@ -127,24 +135,54 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                 ),
               ),
             )
+          else if (board)
+            SliverFillRemaining(
+              hasScrollBody: true,
+              child: AppointmentBoard(
+                appointments: filtered,
+                onOpen: (a) => _showActions(context, a.id),
+              ),
+            )
           else
-            SliverList.separated(
-              itemCount: filtered.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, i) {
-                final a = filtered[i];
-                return Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16),
-                  child: _CheckInCard(appointment: a),
-                );
-              },
+            // One day's visits: few enough to lay out at once, in two or
+            // three columns on a tablet or desktop.
+            SliverCentered(
+              sliver: SliverToBoxAdapter(
+                child: CardColumns(
+                  children: [
+                    for (final a in filtered) _CheckInCard(appointment: a),
+                  ],
+                ),
+              ),
             ),
           const SliverPadding(padding: EdgeInsets.only(bottom: 16)),
         ],
       ),
     );
   }
+}
+
+/// A board card's front-desk actions (bill, move, cancel, no-show) — the
+/// same card the list shows. There is no page for one visit in this app.
+void _showActions(BuildContext context, String appointmentId) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (_) => Consumer(
+      builder: (context, ref, _) {
+        // Follows the visit as it changes, so the buttons stay current.
+        final a = ref.watch(appointmentByIdProvider(appointmentId)).value;
+        if (a == null) return const SizedBox(height: 120);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: _CheckInCard(appointment: a),
+          ),
+        );
+      },
+    ),
+  );
 }
 
 class _StatPill extends StatelessWidget {
@@ -288,8 +326,13 @@ class _CheckInCard extends ConsumerWidget {
           child: const Text('No-show'),
         ),
       if (a.status == AppointmentStatus.arrived ||
-          a.status == AppointmentStatus.inConsultation ||
-          a.status == AppointmentStatus.completed)
+          a.status == AppointmentStatus.inConsultation)
+        _Primary(
+          icon: Icons.task_alt,
+          label: 'Mark done',
+          onPressed: () => _markDone(context, ref),
+        ),
+      if (a.status == AppointmentStatus.completed)
         _Primary(
           icon: Icons.receipt_long_outlined,
           label: 'Bill',
@@ -318,7 +361,7 @@ class _CheckInCard extends ConsumerWidget {
         const SizedBox(height: 8),
         Text(since,
             style: TextStyle(
-                color: a.status.color,
+                color: a.status.color.readableIn(context),
                 fontSize: 13,
                 fontWeight: FontWeight.w600)),
       ],
@@ -331,6 +374,15 @@ class _CheckInCard extends ConsumerWidget {
 }
 
 extension on _CheckInCard {
+  /// Marks the visit done with the services performed, then opens its bill
+  /// to take payment.
+  Future<void> _markDone(BuildContext context, WidgetRef ref) async {
+    final id = await showCompleteVisitSheet(context, ref, appointment);
+    if (id != null && id.isNotEmpty && context.mounted) {
+      context.pushInClinic('/billing/$id');
+    }
+  }
+
   /// The visit's bill — started with its service as the first line if it
   /// has none yet.
   Future<void> _openBill(BuildContext context, WidgetRef ref) async {

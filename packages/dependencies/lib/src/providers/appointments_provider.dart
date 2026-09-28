@@ -6,7 +6,17 @@ import 'catalog_provider.dart';
 import 'clinic_provider.dart';
 import 'supabase_providers.dart';
 
-/// Every appointment the signed-in user is allowed to see.
+/// Where the working set of appointments begins: a week before today, so the
+/// schedule can look back a few days and "last visit" is at hand. Everything
+/// older is read on demand — see [pastAppointmentsProvider].
+final appointmentWindowStartProvider = Provider<DateTime>((ref) {
+  ref.watch(currentUserIdProvider);
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day - 7);
+});
+
+/// Every appointment the signed-in user is allowed to see from
+/// [appointmentWindowStartProvider] on.
 ///
 /// There is no role filtering here on purpose — RLS decides the rows. A
 /// patient gets their own bookings at every clinic they have joined, staff get
@@ -18,13 +28,19 @@ class AppointmentsNotifier extends AsyncNotifier<List<Appointment>> {
     // Refetch when the session changes, so signing out cannot leave the
     // previous user's appointments on screen.
     ref.watch(currentUserIdProvider);
-    return ref.watch(healthRepositoryProvider).fetchAppointments();
+    return ref.watch(healthRepositoryProvider).fetchAppointments(
+        since: ref.watch(appointmentWindowStartProvider));
   }
 
   Future<void> refresh() async {
+    // Visits read one by one or a page at a time are views of the same rows.
+    ref
+      ..invalidate(appointmentFetchProvider)
+      ..invalidate(pastAppointmentsProvider);
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-      () => ref.read(healthRepositoryProvider).fetchAppointments(),
+      () => ref.read(healthRepositoryProvider).fetchAppointments(
+          since: ref.read(appointmentWindowStartProvider)),
     );
   }
 
@@ -47,6 +63,48 @@ class AppointmentsNotifier extends AsyncNotifier<List<Appointment>> {
           status: status,
         );
     await refresh();
+  }
+
+  /// Enters a visit that happened but was never logged: for [patientId] on
+  /// file, or for someone new ([newPatientName], [newPatientPhone]) whose
+  /// chart is registered with it. With [complete] (doctors and admins) it is
+  /// marked completed; otherwise it stays confirmed for one of them to close.
+  Future<void> recordMissedVisit({
+    required String clinicId,
+    String? patientId,
+    String? newPatientName,
+    String? newPatientPhone,
+    required String doctorId,
+    required String serviceName,
+    required DateTime scheduledAt,
+    String? serviceId,
+    required bool complete,
+  }) async {
+    final repo = ref.read(healthRepositoryProvider);
+    try {
+      final id = patientId != null
+          ? await repo.recordPastVisit(
+              clinicId: clinicId,
+              patientId: patientId,
+              doctorId: doctorId,
+              serviceName: serviceName,
+              scheduledAt: scheduledAt,
+              serviceId: serviceId,
+            )
+          : await repo.bookWalkIn(
+              clinicId: clinicId,
+              fullName: newPatientName!,
+              phone: newPatientPhone!,
+              doctorId: doctorId,
+              serviceName: serviceName,
+              scheduledAt: scheduledAt,
+              serviceId: serviceId,
+            );
+      if (complete) await repo.completeRecordedVisit(id);
+    } finally {
+      // Even a half-done record (booked, not completed) is now on file.
+      await refresh();
+    }
   }
 
   /// Registers a walk-in and books them in one transaction. Returns the new
@@ -175,13 +233,110 @@ final myDoctorTodayProvider = Provider<AsyncValue<List<Appointment>>>((ref) {
       .whenData((list) => list.where((a) => a.isToday).toList());
 });
 
-/// Look up one appointment by id out of whatever is already loaded.
+/// One appointment by id: from the loaded window when it is there, else
+/// fetched on its own — a visit opened from a patient's history may be years
+/// old.
 final appointmentByIdProvider =
     Provider.family<AsyncValue<Appointment?>, String>((ref, id) {
-  return ref.watch(appointmentsProvider).whenData((list) {
-    for (final a in list) {
-      if (a.id == id) return a;
-    }
-    return null;
-  });
+  final loaded = ref.watch(appointmentsProvider);
+  if (!loaded.hasValue) return loaded.whenData((_) => null);
+  for (final a in loaded.requireValue) {
+    if (a.id == id) return AsyncValue.data(a);
+  }
+  return ref.watch(appointmentFetchProvider(id));
 });
+
+/// One appointment straight from the database.
+final appointmentFetchProvider = FutureProvider.autoDispose
+    .family<Appointment?, String>((ref, id) {
+  ref.watch(currentUserIdProvider);
+  return ref.watch(healthRepositoryProvider).fetchAppointment(id);
+});
+
+// ── Older visits, a page at a time ──────────────────────────────────────────
+
+/// Whose older visits: one doctor's, one chart's, or (both null) the whole
+/// current clinic's.
+typedef PastAppointmentsQuery = ({String? doctorId, String? patientId});
+
+/// Visits before the loaded window, newest first, as far back as has been
+/// asked for.
+class PastAppointments {
+  const PastAppointments({
+    this.items = const [],
+    this.hasMore = true,
+    this.loadingMore = false,
+    this.error,
+  });
+
+  final List<Appointment> items;
+  final bool hasMore;
+  final bool loadingMore;
+
+  /// Why the last "load more" failed; the pages already shown stay.
+  final Object? error;
+
+  PastAppointments copyWith({
+    List<Appointment>? items,
+    bool? hasMore,
+    bool? loadingMore,
+    Object? error,
+  }) =>
+      PastAppointments(
+        items: items ?? this.items,
+        hasMore: hasMore ?? this.hasMore,
+        loadingMore: loadingMore ?? this.loadingMore,
+        error: error,
+      );
+}
+
+class PastAppointmentsNotifier extends AsyncNotifier<PastAppointments> {
+  PastAppointmentsNotifier(this.query);
+
+  final PastAppointmentsQuery query;
+
+  static const pageSize = 20;
+
+  Future<List<Appointment>> _page(int offset) async {
+    final clinicId = ref.read(currentClinicIdProvider);
+    if (clinicId == null) return const [];
+    return ref.read(healthRepositoryProvider).fetchPastAppointments(
+          clinicId: clinicId,
+          before: ref.read(appointmentWindowStartProvider),
+          doctorId: query.doctorId,
+          patientId: query.patientId,
+          offset: offset,
+          limit: pageSize,
+        );
+  }
+
+  @override
+  Future<PastAppointments> build() async {
+    ref
+      ..watch(currentClinicIdProvider)
+      ..watch(appointmentWindowStartProvider);
+    final first = await _page(0);
+    return PastAppointments(items: first, hasMore: first.length == pageSize);
+  }
+
+  Future<void> loadMore() async {
+    final current = state.value;
+    if (current == null || !current.hasMore || current.loadingMore) return;
+    state = AsyncValue.data(current.copyWith(loadingMore: true));
+    try {
+      final next = await _page(current.items.length);
+      state = AsyncValue.data(current.copyWith(
+        items: [...current.items, ...next],
+        hasMore: next.length == pageSize,
+        loadingMore: false,
+      ));
+    } catch (e) {
+      state = AsyncValue.data(current.copyWith(loadingMore: false, error: e));
+    }
+  }
+}
+
+final pastAppointmentsProvider = AsyncNotifierProvider.autoDispose
+    .family<PastAppointmentsNotifier, PastAppointments, PastAppointmentsQuery>(
+  PastAppointmentsNotifier.new,
+);

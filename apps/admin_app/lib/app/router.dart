@@ -12,15 +12,22 @@ import '../features/roster/services_screen.dart';
 
 /// /:clinic/dashboard           Dashboard tab (home)
 /// /:clinic/schedule            Schedule tab
+/// /:clinic/calendar            Calendar tab: month / week / day; tap
+///                              empty time to book it
 /// /:clinic/patients            Patients tab
 /// /:clinic/patients/:id
 /// /:clinic/appointments/:id
 /// /:clinic/billing             Billing tab
 /// /:clinic/billing/:id         one bill
+/// /:clinic/prices              what each service costs
+/// /:clinic/data                patients, visits and dental charts in and
+///                              out as CSV (from Patients)
 /// /:clinic/settings            Clinic tab
 /// /:clinic/settings/doctors    roster and working hours
 /// /:clinic/settings/services   what can be booked, how long, how much
 /// /:clinic/settings/closures   holidays and doctors' leave
+/// /:clinic/preferences         this person's Settings (account menu), not
+///                              the clinic's
 ///
 /// A branch admin is held to their one branch by the router's redirect; a
 /// full admin of several switches between them from the title.
@@ -30,25 +37,40 @@ final adminRouterProvider = Provider<GoRouter>(
     appName: 'Admin',
     routes: [
       GoRoute(
+        path: 'preferences',
+        builder: (_, __) => _framed(const SettingsScreen()),
+      ),
+      GoRoute(
         path: 'appointments/:id',
-        builder: (context, state) => AdminAppointmentDetailScreen(
-            appointmentId: state.pathParameters['id']!),
+        builder: (context, state) => _framed(AdminAppointmentDetailScreen(
+            appointmentId: state.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: 'prices',
+        builder: (_, __) => _framed(const PriceListScreen()),
+      ),
+      GoRoute(
+        path: 'data',
+        builder: (_, __) => _framed(const ImportExportScreen()),
       ),
       GoRoute(
         path: 'billing/:id',
         builder: (_, state) =>
-            InvoiceScreen(invoiceId: state.pathParameters['id']!),
+            _framed(InvoiceScreen(invoiceId: state.pathParameters['id']!)),
       ),
       GoRoute(
         path: 'patients/:id',
-        builder: (context, state) => PatientHistoryScreen(
+        builder: (context, state) => _framed(PatientHistoryScreen(
           patientId: state.pathParameters['id']!,
           onOpenAppointment: (a) =>
-              context.pushInClinic('/appointments/${a.id}'),
-        ),
+              context.openInClinic('/appointments/${a.id}'),
+          onOpenInvoice: (id) => context.pushInClinic('/billing/$id'),
+          canRecordVisits: true,
+        )),
       ),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, shell) => _NavScaffold(shell: shell),
+        builder: (context, state, shell) =>
+            ClinicNavScaffold.shell(tabs: _tabs, shell: shell),
         branches: [
           StatefulShellBranch(routes: [
             GoRoute(
@@ -64,9 +86,22 @@ final adminRouterProvider = Provider<GoRouter>(
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
+              path: 'calendar',
+              builder: (context, _) => AppointmentCalendarScreen(
+                scope: CalendarScope.clinic,
+                canBook: true,
+                onOpenAppointment: (a) =>
+                    context.pushInClinic('/appointments/${a.id}'),
+              ),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
               path: 'patients',
               builder: (context, _) => PatientDirectoryScreen(
                 onOpenPatient: (p) => context.pushInClinic('/patients/${p.id}'),
+                canRecordVisits: true,
+                onOpenData: () => context.pushInClinic('/data'),
               ),
             ),
           ]),
@@ -75,6 +110,7 @@ final adminRouterProvider = Provider<GoRouter>(
               path: 'billing',
               builder: (context, _) => BillingScreen(
                 onOpenInvoice: (id) => context.pushInClinic('/billing/$id'),
+                onOpenPrices: () => context.pushInClinic('/prices'),
               ),
             ),
           ]),
@@ -104,54 +140,47 @@ final adminRouterProvider = Provider<GoRouter>(
   ),
 );
 
-class _NavScaffold extends ConsumerWidget {
-  const _NavScaffold({required this.shell});
-  final StatefulNavigationShell shell;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // New staff waiting for approval surface on the Clinic tab from anywhere.
-    final pending = ref.watch(pendingStaffRequestsProvider).length;
-    Widget clinicIcon(IconData icon) => Badge(
-          isLabelVisible: pending > 0,
-          label: Text('$pending'),
-          child: Icon(icon),
-        );
-
-    return Scaffold(
-      body: shell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: shell.currentIndex,
-        onDestinationSelected: (i) =>
-            shell.goBranch(i, initialLocation: i == shell.currentIndex),
-        destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Schedule',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.group_outlined),
-            selectedIcon: Icon(Icons.group),
-            label: 'Patients',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Billing',
-          ),
-          NavigationDestination(
-            icon: clinicIcon(Icons.storefront_outlined),
-            selectedIcon: clinicIcon(Icons.storefront),
-            label: 'Clinic',
-          ),
-        ],
+/// The admin app's tabs, in order; the shell's branches follow the same order.
+List<ClinicTab> _tabs(WidgetRef ref) => [
+      const ClinicTab(
+        path: '/dashboard',
+        label: 'Dashboard',
+        icon: Icons.dashboard_outlined,
+        selectedIcon: Icons.dashboard,
       ),
-    );
-  }
-}
+      const ClinicTab(
+        path: '/schedule',
+        label: 'Schedule',
+        icon: Icons.calendar_month_outlined,
+        selectedIcon: Icons.calendar_month,
+      ),
+      const ClinicTab(
+        path: '/calendar',
+        label: 'Calendar',
+        icon: Icons.calendar_view_week_outlined,
+        selectedIcon: Icons.calendar_view_week,
+      ),
+      const ClinicTab(
+        path: '/patients',
+        label: 'Patients',
+        icon: Icons.group_outlined,
+        selectedIcon: Icons.group,
+      ),
+      const ClinicTab(
+        path: '/billing',
+        label: 'Billing',
+        icon: Icons.receipt_long_outlined,
+        selectedIcon: Icons.receipt_long,
+      ),
+      // New staff waiting for approval surface on the Clinic tab from anywhere.
+      ClinicTab(
+        path: '/settings',
+        label: 'Clinic',
+        icon: Icons.storefront_outlined,
+        selectedIcon: Icons.storefront,
+        badge: ref.watch(pendingStaffRequestsProvider).length,
+      ),
+    ];
+
+/// A page opened from a tab, with the tabs beside it on a wide screen.
+Widget _framed(Widget page) => ClinicNavScaffold.frame(tabs: _tabs, child: page);

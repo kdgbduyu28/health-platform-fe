@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../app/clinic_router.dart';
 import '../models/app_notification.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/notifications_provider.dart';
@@ -21,7 +22,8 @@ class NotificationsButton extends ConsumerWidget {
     return IconButton(
       tooltip: 'Notifications',
       color: color,
-      onPressed: () => showNotificationsSheet(context),
+      onPressed: () => showNotificationsSheet(context,
+          settingsPath: context.clinicPath('/preferences')),
       icon: Badge(
         isLabelVisible: unread > 0,
         label: Text(unread > 99 ? '99+' : '$unread'),
@@ -33,17 +35,24 @@ class NotificationsButton extends ConsumerWidget {
   }
 }
 
-Future<void> showNotificationsSheet(BuildContext context) =>
+/// The inbox. [settingsPath] adds a gear that opens Settings — worked out by
+/// the caller, whose page knows the clinic; the sheet's own route does not.
+Future<void> showNotificationsSheet(
+  BuildContext context, {
+  String? settingsPath,
+}) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => const _NotificationsSheet(),
+      builder: (_) => _NotificationsSheet(settingsPath: settingsPath),
     );
 
 class _NotificationsSheet extends ConsumerWidget {
-  const _NotificationsSheet();
+  const _NotificationsSheet({this.settingsPath});
+
+  final String? settingsPath;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -74,6 +83,16 @@ class _NotificationsSheet extends ConsumerWidget {
                         .read(healthRepositoryProvider)
                         .markNotificationsRead(app),
                     child: const Text('Mark all read'),
+                  ),
+                if (settingsPath != null)
+                  IconButton(
+                    tooltip: 'Notification settings',
+                    icon: const Icon(Icons.settings_outlined),
+                    onPressed: () {
+                      final router = GoRouter.of(context);
+                      Navigator.pop(context);
+                      router.push(settingsPath!);
+                    },
                   ),
               ],
             ),

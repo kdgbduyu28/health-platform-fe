@@ -27,36 +27,40 @@ class DoctorsScreen extends ConsumerWidget {
         builder: (doctors) => doctors.isEmpty
             ? const _Empty(
                 'No doctors yet. Add one so patients have someone to book.')
-            : ListView.separated(
+            : CenteredScroll(
+                maxWidth: ContentWidth.list,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                itemCount: doctors.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final d = doctors[i];
-                  final cs = Theme.of(context).colorScheme;
-                  return Card(
-                    child: ListTile(
-                      onTap: () => _edit(context, ref, d),
-                      leading: DoctorAvatar(doctor: d),
-                      title: Text('Dr. ${d.name}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: d.isActive ? null : cs.outline,
-                          )),
-                      subtitle: Text([
-                        if (d.specialty.isNotEmpty) d.specialty,
-                        d.availableWeekdays.isEmpty
-                            ? 'No working days'
-                            : formatWeekdays(d.availableWeekdays),
-                        describeTimeSlots(d.availableTimeSlots),
-                      ].join('\n')),
-                      isThreeLine: true,
-                      trailing: d.isActive
-                          ? const Icon(Icons.edit_outlined)
-                          : const Chip(label: Text('Inactive')),
-                    ),
-                  );
-                },
+                builder: (padding) => ListView.separated(
+                  padding: padding,
+                  itemCount: doctors.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final d = doctors[i];
+                    final cs = Theme.of(context).colorScheme;
+                    return Card(
+                      child: ListTile(
+                        onTap: () => _edit(context, ref, d),
+                        leading: DoctorAvatar(doctor: d),
+                        title: Text('Dr. ${d.name}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: d.isActive ? null : cs.outline,
+                            )),
+                        subtitle: Text([
+                          if (d.specialty.isNotEmpty) d.specialty,
+                          d.availableWeekdays.isEmpty
+                              ? 'No working days'
+                              : formatWeekdays(d.availableWeekdays),
+                          describeTimeSlots(d.availableTimeSlots),
+                        ].join('\n')),
+                        isThreeLine: true,
+                        trailing: d.isActive
+                            ? const Icon(Icons.edit_outlined)
+                            : const Chip(label: Text('Inactive')),
+                      ),
+                    );
+                  },
+                ),
               ),
       ),
     );

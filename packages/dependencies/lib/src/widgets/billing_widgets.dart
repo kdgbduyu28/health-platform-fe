@@ -8,6 +8,7 @@ import '../models/invoice.dart';
 import '../models/money.dart';
 import '../providers/billing_provider.dart';
 import '../providers/supabase_providers.dart';
+import '../theme/tone.dart';
 import 'async_view.dart';
 
 class InvoiceStatusChip extends StatelessWidget {
@@ -20,13 +21,13 @@ class InvoiceStatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: status.color.withAlpha(28),
+        color: status.color.readableIn(context).withAlpha(28),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: status.color.withAlpha(80)),
+        border: Border.all(color: status.color.readableIn(context).withAlpha(80)),
       ),
       child: Text(status.displayName,
           style: TextStyle(
-              color: status.color, fontSize: 12, fontWeight: FontWeight.w600)),
+              color: status.color.readableIn(context), fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -36,12 +37,14 @@ class InvoiceTile extends StatelessWidget {
   const InvoiceTile({
     super.key,
     required this.invoice,
-    required this.onTap,
+    this.onTap,
     this.showPatient = false,
   });
 
   final Invoice invoice;
-  final VoidCallback onTap;
+
+  /// Null where the app has no bill page (the doctor app).
+  final VoidCallback? onTap;
   final bool showPatient;
 
   @override

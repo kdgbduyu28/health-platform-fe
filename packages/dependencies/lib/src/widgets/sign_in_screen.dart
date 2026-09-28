@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/clinic.dart';
 import '../providers/clinic_provider.dart';
+import '../providers/preferences_provider.dart';
 import '../providers/supabase_providers.dart';
 import '../theme/brand.dart';
 import 'async_view.dart';
@@ -34,7 +35,9 @@ class SignInScreen extends ConsumerStatefulWidget {
 }
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
-  final _email = TextEditingController();
+  // Most devices sign in the same person every time.
+  late final _email =
+      TextEditingController(text: ref.read(preferencesProvider).lastEmail);
   final _password = TextEditingController();
   final _fullName = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -87,6 +90,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         }
       } else {
         await repo.signIn(_email.text.trim(), _password.text);
+        await ref.read(preferencesProvider).setLastEmail(_email.text.trim());
       }
     } catch (e) {
       if (mounted) setState(() => _error = describeError(e));

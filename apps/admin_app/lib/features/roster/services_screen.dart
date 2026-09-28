@@ -33,33 +33,37 @@ class ServicesScreen extends ConsumerWidget {
                       textAlign: TextAlign.center),
                 ),
               )
-            : ListView.separated(
+            : CenteredScroll(
+                maxWidth: ContentWidth.list,
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                itemCount: services.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final s = services[i];
-                  final cs = Theme.of(context).colorScheme;
-                  return Card(
-                    child: ListTile(
-                      onTap: () => _edit(context, ref, s),
-                      leading: Icon(Icons.medical_services_outlined,
-                          color: s.isActive ? cs.primary : cs.outline),
-                      title: Text(s.name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: s.isActive ? null : cs.outline,
-                          )),
-                      subtitle: Text([
-                        '${s.durationMinutes} min',
-                        s.priceLabel ?? 'No price set',
-                      ].join(' · ')),
-                      trailing: s.isActive
-                          ? const Icon(Icons.edit_outlined)
-                          : const Chip(label: Text('Retired')),
-                    ),
-                  );
-                },
+                builder: (padding) => ListView.separated(
+                  padding: padding,
+                  itemCount: services.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final s = services[i];
+                    final cs = Theme.of(context).colorScheme;
+                    return Card(
+                      child: ListTile(
+                        onTap: () => _edit(context, ref, s),
+                        leading: Icon(Icons.medical_services_outlined,
+                            color: s.isActive ? cs.primary : cs.outline),
+                        title: Text(s.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: s.isActive ? null : cs.outline,
+                            )),
+                        subtitle: Text([
+                          '${s.durationMinutes} min',
+                          s.priceLabel ?? 'No price set',
+                        ].join(' · ')),
+                        trailing: s.isActive
+                            ? const Icon(Icons.edit_outlined)
+                            : const Chip(label: Text('Retired')),
+                      ),
+                    );
+                  },
+                ),
               ),
       ),
     );
