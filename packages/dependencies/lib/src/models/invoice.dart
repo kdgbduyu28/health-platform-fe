@@ -156,6 +156,7 @@ class Invoice {
     this.patient,
     this.visitService,
     this.visitAt,
+    this.visitDoctor,
   });
 
   final String id;
@@ -186,6 +187,9 @@ class Invoice {
   final String? visitService;
   final DateTime? visitAt;
 
+  /// The visit's doctor's full name, when fetched embedded.
+  final String? visitDoctor;
+
   double get balance => total - amountPaid;
 
   bool get isDraft => status == InvoiceStatus.draft;
@@ -208,9 +212,11 @@ class Invoice {
   ///
   ///   invoices?select=*,items:invoice_items(*),payments(*),
   ///     patient:patients(*,person:persons(*)),
-  ///     appointment:appointments(service_name,scheduled_at)
+  ///     appointment:appointments(service_name,scheduled_at,
+  ///       doctor:doctors(full_name))
   factory Invoice.fromJson(Map<String, dynamic> json) {
     final visit = json['appointment'] as Map<String, dynamic>?;
+    final doctor = visit?['doctor'] as Map<String, dynamic>?;
     final items = [
       for (final i in (json['items'] as List<dynamic>? ?? const []))
         InvoiceItem.fromJson(i as Map<String, dynamic>),
@@ -243,6 +249,7 @@ class Invoice {
           : Patient.fromJson(json['patient'] as Map<String, dynamic>),
       visitService: visit?['service_name'] as String?,
       visitAt: _time(visit?['scheduled_at']),
+      visitDoctor: doctor?['full_name'] as String?,
     );
   }
 }

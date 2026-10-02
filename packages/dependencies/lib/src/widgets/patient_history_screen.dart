@@ -10,6 +10,7 @@ import '../models/invoice.dart';
 import '../models/money.dart';
 import '../models/patient.dart';
 import '../models/patient_intake.dart';
+import '../providers/audit_provider.dart';
 import '../providers/billing_provider.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/clinical_provider.dart';
@@ -17,11 +18,13 @@ import '../providers/dental_provider.dart';
 import '../providers/intake_provider.dart';
 import '../providers/preferences_provider.dart';
 import 'async_view.dart';
+import 'audit_log_view.dart';
 import 'billing_widgets.dart';
 import 'clinical_notes.dart';
 import 'dental_chart.dart';
 import 'intake_screens.dart';
 import 'patient_remarks.dart';
+import 'print_statement_sheet.dart';
 import 'record_visit_sheet.dart';
 import 'status_badge.dart';
 
@@ -37,6 +40,7 @@ import 'status_badge.dart';
 ///   Appointments  every visit, upcoming and past
 ///   Billing       every bill, with what was paid and what is owed
 ///   Chart & form  the patient information form and the tooth chart
+///   Changes       who changed what on this chart, and when (admins only)
 ///
 /// Shared by the doctor, front desk and admin apps. What each sees follows
 /// [canSeeClinicalNotesProvider], which mirrors the database: clinicians get
@@ -95,6 +99,7 @@ class PatientHistoryScreen extends ConsumerWidget {
     final historyAsync = ref.watch(patientHistoryProvider(patientId));
     final invoicesAsync = ref.watch(patientInvoicesProvider(patientId));
     final dental = ref.watch(clinicChartsTeethProvider);
+    final audited = ref.watch(canSeeAuditLogProvider);
     final chart = dental ? ref.watch(dentalChartProvider(patientId)).value : null;
     final visits = historyAsync.value;
     final invoices = invoicesAsync.value;
@@ -111,6 +116,7 @@ class PatientHistoryScreen extends ConsumerWidget {
       'appointments',
       'billing',
       'chart',
+      if (audited) 'changes',
     ];
 
     return DefaultTabController(
@@ -145,12 +151,13 @@ class PatientHistoryScreen extends ConsumerWidget {
           ),
           'billing': (
             invoices == null ? 'Billing' : 'Billing (${invoices.length})',
-            _BillingTab(patientId: patientId, onOpenInvoice: openInvoice),
+            _BillingTab(patient: patient, onOpenInvoice: openInvoice),
           ),
           'chart': (
             dental ? 'Chart & form' : 'Information form',
             _ChartTab(patient: patient),
           ),
+          'changes': ('Changes', AuditLogView(patientId: patient.id)),
         };
 
         return Scaffold(
@@ -1260,14 +1267,15 @@ class _AppointmentsTab extends ConsumerWidget {
 // ── Billing ─────────────────────────────────────────────────────────────────
 
 class _BillingTab extends ConsumerWidget {
-  const _BillingTab({required this.patientId, this.onOpenInvoice});
+  const _BillingTab({required this.patient, this.onOpenInvoice});
 
-  final String patientId;
+  final Patient patient;
   final void Function(String invoiceId)? onOpenInvoice;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
+    final patientId = patient.id;
     final billsAsync = ref.watch(patientInvoicesProvider(patientId));
     final open = onOpenInvoice;
 
@@ -1319,9 +1327,22 @@ class _BillingTab extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                child: Text('Drafts and voided bills are not counted.',
-                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                padding: const EdgeInsets.fromLTRB(4, 4, 0, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('Drafts and voided bills are not counted.',
+                          style: TextStyle(
+                              fontSize: 12, color: cs.onSurfaceVariant)),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => showPrintStatementSheet(context,
+                          patient: patient, invoices: bills),
+                      icon: const Icon(Icons.print_outlined, size: 18),
+                      label: const Text('Print statement'),
+                    ),
+                  ],
+                ),
               ),
               for (final v in bills)
                 InvoiceTile(

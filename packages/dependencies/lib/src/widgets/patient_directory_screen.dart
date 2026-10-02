@@ -24,9 +24,9 @@ import 'record_visit_sheet.dart';
 ///
 /// Shared by the staff apps; each passes [onOpenPatient] to route to its own
 /// patient page. [canRecordVisits] adds "Manually add visit", for a visit
-/// that happened but was never logged. The apps that register patients
-/// (front desk, admin) also get "Add patient", and [onOpenData] opens their
-/// import and export of patients as CSV.
+/// that happened but was never logged. Every staff app gets "Add patient";
+/// [onOpenData] opens the import and export of patients as CSV, which only
+/// the front desk and admin apps pass.
 class PatientDirectoryScreen extends ConsumerStatefulWidget {
   const PatientDirectoryScreen({
     super.key,

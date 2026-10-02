@@ -15,6 +15,7 @@ import '../providers/clinical_provider.dart';
 import '../providers/supabase_providers.dart';
 import 'async_view.dart';
 import 'ledger_view.dart' show PaymentMethodChips;
+import 'print_statement_sheet.dart';
 
 /// One bill. The front desk and admins build it while it is a draft, issue
 /// it, and take payments on it; an admin can void a payment. Everyone else —
@@ -55,6 +56,14 @@ class InvoiceScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(v.number ?? 'Draft bill'),
         actions: [
+          if (v.patient case final patient?
+              when v.status != InvoiceStatus.voided)
+            IconButton(
+              tooltip: 'Print or save as PDF',
+              icon: const Icon(Icons.print_outlined),
+              onPressed: () => printStatement(context, ref,
+                  patient: patient, invoices: [v]),
+            ),
           if (canBill && (v.isDraft || v.status != InvoiceStatus.voided))
             PopupMenuButton<String>(
               onSelected: (a) => a == 'delete' ? actions.deleteDraft() : actions.voidBill(),

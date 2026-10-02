@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../captcha/human_check.dart';
 import '../providers/supabase_providers.dart';
 import 'async_view.dart';
 
@@ -26,6 +27,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
   final _code = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
+  final _check = HumanCheckController();
 
   bool _codeSent = false;
 
@@ -42,6 +44,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
     for (final c in [_email, _code, _password, _confirm]) {
       c.dispose();
     }
+    _check.dispose();
     super.dispose();
   }
 
@@ -54,10 +57,12 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
       _notice = null;
     });
 
+    String? captchaToken;
     try {
+      captchaToken = await _check.token();
       await ref
           .read(healthRepositoryProvider)
-          .sendPasswordResetCode(_email.text);
+          .sendPasswordResetCode(_email.text, captchaToken: captchaToken);
       if (mounted) {
         setState(() {
           _codeSent = true;
@@ -68,6 +73,8 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = describeError(e));
     } finally {
+      // Each token is good for one request, and "Send a new code" needs one.
+      if (captchaToken != null) _check.reset();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -221,6 +228,16 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(color: cs.primary)),
                       ],
+                      // Guards sending a code, which is also what "Send a new
+                      // code" does, so it stays until the code is used. Out
+                      // of sight on the second step unless Cloudflare wants
+                      // a click.
+                      if (!_verified)
+                        HumanCheck(
+                          controller: _check,
+                          action: 'reset',
+                          alwaysVisible: !_codeSent,
+                        ),
                       const SizedBox(height: 24),
                       FilledButton(
                         onPressed:

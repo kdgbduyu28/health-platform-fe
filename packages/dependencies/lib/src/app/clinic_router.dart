@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../models/app_role.dart';
 import '../models/clinic.dart';
 import '../models/clinic_page.dart';
+import '../legal/legal_document.dart';
+import '../legal/privacy_policy.dart';
+import '../legal/terms.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/intake_provider.dart';
 import '../providers/preferences_provider.dart';
@@ -20,6 +23,7 @@ import 'clinic_app_shell.dart';
 ///
 ///   /                      sign in, or straight to the user's first clinic
 ///   /not-found             no active clinic has that slug
+///   /privacy, /terms       the Privacy Policy and the Terms, for anyone
 ///   /:clinic               the public page (patient app, via [landing]);
 ///                          the app's home tab everywhere else
 ///   /:clinic/sign-in       that clinic's branded sign-in; `?next=` returns
@@ -63,6 +67,16 @@ GoRouter createClinicRouter(
       GoRoute(
         path: '/not-found',
         builder: (_, __) => const ClinicNotFoundScreen(),
+      ),
+      GoRoute(
+        path: '/privacy',
+        builder: (_, __) =>
+            const LegalDocumentScreen(document: PrivacyPolicy.document),
+      ),
+      GoRoute(
+        path: '/terms',
+        builder: (_, __) =>
+            const LegalDocumentScreen(document: TermsAndConditions.document),
       ),
       ShellRoute(
         builder: (context, state, child) =>
@@ -244,7 +258,8 @@ Future<String?> _redirect(
   }
 
   final slug = segments.first.toLowerCase();
-  if (slug == 'not-found') return null;
+  // Pages that belong to no clinic. All are reserved slugs in the database.
+  if (const {'not-found', 'privacy', 'terms'}.contains(slug)) return null;
   // One spelling per clinic, so a link typed in capitals still matches.
   if (slug != segments.first) {
     return state.uri.replace(path: '/${[slug, ...segments.skip(1)].join('/')}')

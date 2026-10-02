@@ -35,4 +35,17 @@ class SupabaseConfig {
     defaultValue:
         'BDBiuAUhyEtalMV851jQgWZhWi_8azbFbRjmUwLZN76FDMV7RHOC4mZzOH4KzhtrAmyoALPDyFcOrI-UczHrclQ',
   );
+
+  /// The Cloudflare Turnstile site key behind the human check on sign-in,
+  /// sign-up and password reset. Public, like the keys above; its secret
+  /// half is set in Supabase Auth (Attack Protection). Empty turns the
+  /// check off in the apps. The widget only runs on the hostnames listed
+  /// for it in Cloudflare (the four rowph*.pages.dev apps).
+  ///
+  /// Ship a build with this set BEFORE turning CAPTCHA on in Supabase: from
+  /// then on, a build without it cannot sign anyone in.
+  static const turnstileSiteKey = String.fromEnvironment(
+    'TURNSTILE_SITE_KEY',
+    defaultValue: '0x4AAAAAAFKL31aTz1AJa7Ad',
+  );
 }

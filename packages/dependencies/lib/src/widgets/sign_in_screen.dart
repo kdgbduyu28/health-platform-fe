@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
+import '../captcha/human_check.dart';
 import '../models/clinic.dart';
+import '../legal/legal_document.dart';
+import '../legal/privacy_policy.dart';
+import '../legal/terms.dart';
 import '../providers/clinic_provider.dart';
 import '../providers/preferences_provider.dart';
 import '../providers/supabase_providers.dart';
@@ -41,17 +46,31 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _password = TextEditingController();
   final _fullName = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final _check = HumanCheckController();
 
   late bool _isSignUp = widget.initialSignUp;
   bool _busy = false;
+
+  /// The Terms and Privacy Policy box on the create-account form. Never
+  /// ticked for them: the law wants it read, not skipped past.
+  bool _agreed = false;
   String? _error;
   String? _notice;
+
+  /// Wrong sign-ins on this screen. Past [_quietTries] the human check comes
+  /// out into view. Supabase checks a token on every attempt either way; this
+  /// only decides whether the person sees it happen.
+  int _failedSignIns = 0;
+  static const _quietTries = 3;
+
+  bool get _showCheck => _isSignUp || _failedSignIns >= _quietTries;
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
     _fullName.dispose();
+    _check.dispose();
     super.dispose();
   }
 
@@ -69,12 +88,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     });
 
     final repo = ref.read(healthRepositoryProvider);
+    String? captchaToken;
     try {
+      captchaToken = await _check.token();
       if (_isSignUp) {
         await repo.signUp(
           _email.text.trim(),
           _password.text,
           _fullName.text.trim(),
+          captchaToken: captchaToken,
+          privacyPolicyVersion: PrivacyPolicy.version,
+          termsVersion: TermsAndConditions.version,
         );
         if (mounted) {
           final app = ref.read(appRoleProvider);
@@ -89,12 +113,27 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               'before signing in.$nextStep');
         }
       } else {
-        await repo.signIn(_email.text.trim(), _password.text);
+        await repo.signIn(
+          _email.text.trim(),
+          _password.text,
+          captchaToken: captchaToken,
+        );
         await ref.read(preferencesProvider).setLastEmail(_email.text.trim());
       }
     } catch (e) {
-      if (mounted) setState(() => _error = describeError(e));
+      if (mounted) {
+        setState(() {
+          if (!_isSignUp && e is AuthException) _failedSignIns++;
+          _error = describeError(e);
+          if (!_isSignUp && _failedSignIns >= _quietTries) {
+            _error = '$_error\nToo many tries. Wait for the security check '
+                'below to pass before you try again.';
+          }
+        });
+      }
     } finally {
+      // Each token is good for one request.
+      if (captchaToken != null) _check.reset();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -177,6 +216,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           child: const Text('Forgot password?'),
                         ),
                       ),
+                    if (_isSignUp) ...[
+                      const SizedBox(height: 12),
+                      _PoliciesBox(
+                        value: _agreed,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _agreed = v),
+                      ),
+                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       _Banner(text: _error!, color: cs.error, icon: Icons.error_outline),
@@ -189,6 +237,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         icon: Icons.info_outline,
                       ),
                     ],
+                    HumanCheck(
+                      controller: _check,
+                      action: _isSignUp ? 'sign-up' : 'sign-in',
+                      alwaysVisible: _showCheck,
+                    ),
                     const SizedBox(height: 24),
                     FilledButton(
                       onPressed: _busy ? null : _submit,
@@ -266,6 +319,82 @@ class _Header extends StatelessWidget {
           style: TextStyle(color: cs.onSurfaceVariant, letterSpacing: 0.5),
         ),
       ],
+    );
+  }
+}
+
+/// "I agree to the Terms and Conditions and have read the Privacy Policy",
+/// with both a tap away. The form will not create the account until it is
+/// ticked.
+///
+/// It is not consent to health information: a clinic asks for that on its
+/// own form, later.
+class _PoliciesBox extends StatelessWidget {
+  const _PoliciesBox({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    Widget link(LegalDocument document) => InkWell(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LegalDocumentScreen(document: document),
+            ),
+          ),
+          child: Text(
+            document.title,
+            style: TextStyle(
+              color: cs.primary,
+              decoration: TextDecoration.underline,
+              decorationColor: cs.primary,
+            ),
+          ),
+        );
+
+    return FormField<bool>(
+      initialValue: value,
+      validator: (v) => v == true
+          ? null
+          : 'Tick the box to agree to the Terms and Conditions',
+      builder: (field) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Checkbox(
+                value: value,
+                onChanged: onChanged == null
+                    ? null
+                    : (v) {
+                        onChanged!(v ?? false);
+                        field.didChange(v);
+                      },
+              ),
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text('I agree to the '),
+                    link(TermsAndConditions.document),
+                    const Text(' and have read the '),
+                    link(PrivacyPolicy.document),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (field.hasError)
+            Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Text(field.errorText!,
+                  style: TextStyle(color: cs.error, fontSize: 12)),
+            ),
+        ],
+      ),
     );
   }
 }

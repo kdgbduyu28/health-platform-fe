@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/adaptive_layout.dart';
+import '../legal/legal_document.dart';
+import '../legal/privacy_policy.dart';
+import '../legal/terms.dart';
 import '../models/app_role.dart';
 import '../models/dental_chart.dart';
 import '../providers/clinic_provider.dart';
@@ -526,6 +529,18 @@ class _AboutCard extends ConsumerWidget {
             title: Text('${app.displayName} app'),
             subtitle: clinic == null ? null : Text(clinic.name),
           ),
+          for (final (icon, document) in const [
+            (Icons.privacy_tip_outlined, PrivacyPolicy.document),
+            (Icons.gavel_outlined, TermsAndConditions.document),
+          ])
+            ListTile(
+              leading: Icon(icon),
+              title: Text(document.title),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => LegalDocumentScreen(document: document),
+              )),
+            ),
           ListTile(
             leading: const Icon(Icons.restart_alt),
             title: const Text('Reset this device\'s settings'),

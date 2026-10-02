@@ -12,8 +12,22 @@ class MyBillsScreen extends ConsumerWidget {
     final async = ref.watch(myInvoicesProvider);
     final cs = Theme.of(context).colorScheme;
 
+    final bills = async.value;
+    final chart = ref.watch(myPatientProvider).value;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Bills & payments')),
+      appBar: AppBar(
+        title: const Text('Bills & payments'),
+        actions: [
+          if (chart != null && bills != null && bills.isNotEmpty)
+            IconButton(
+              tooltip: 'Print statement',
+              icon: const Icon(Icons.print_outlined),
+              onPressed: () => showPrintStatementSheet(context,
+                  patient: chart, invoices: bills),
+            ),
+        ],
+      ),
       body: AsyncView(
         value: async,
         onRetry: () => ref.invalidate(myInvoicesProvider),

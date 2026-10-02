@@ -175,7 +175,9 @@ class _WalkInBookingScreenState extends ConsumerState<WalkInBookingScreen> {
         AsyncView(
           value: ref.watch(availableSlotsProvider((
             doctorId: doctor.id,
-            day: DateTime.now(),
+            // Date only: a raw now() is a new family key on every build, so
+            // each fetch's result rebuilt the screen and started another.
+            day: DateUtils.dateOnly(DateTime.now()),
             serviceId: _service?.id,
             ignore: null,
           ))),

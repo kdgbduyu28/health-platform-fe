@@ -20,9 +20,12 @@ enum AppRole {
   /// Admins are added by email instead, by a full admin.
   bool get takesStaffCodes => this == AppRole.doctor || this == AppRole.assistant;
 
-  /// Whether this app registers new patients — and so can hand the tablet to
-  /// one to fill in their own form. Mirrors `private.can_register_patients`.
-  bool get registersPatients => this == AppRole.assistant || this == AppRole.admin;
+  /// Whether this app adds new patients — and so can hand the tablet to one
+  /// to fill in their own form. Every staff app does; mirrors
+  /// `private.can_add_patients`. Importing them from a file is narrower
+  /// (front desk and admins), and is offered only where an app passes
+  /// `onOpenData`.
+  bool get registersPatients => isStaff;
 
   /// Whether a membership with this role may read and write clinical notes.
   /// Mirrors `private.is_clinician` in the database.

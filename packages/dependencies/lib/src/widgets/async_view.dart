@@ -147,6 +147,12 @@ String describeError(Object error) {
     if (error.message.contains('expired or is invalid')) {
       return 'That code is wrong or has expired. Request a new one.';
     }
+    // Turnstile's token was missing, spent or refused by Cloudflare.
+    if (error.code == 'captcha_failed' ||
+        error.message.toLowerCase().contains('captcha')) {
+      return 'The security check did not pass. Wait for it to finish, then '
+          'try again.';
+    }
     return error.message;
   }
   final text = error.toString();

@@ -22,6 +22,7 @@ import '../features/roster/services_screen.dart';
 /// /:clinic/prices              what each service costs
 /// /:clinic/data                patients, visits and dental charts in and
 ///                              out as CSV (from Patients)
+/// /:clinic/activity            who changed what, and when (from Clinic)
 /// /:clinic/settings            Clinic tab
 /// /:clinic/settings/doctors    roster and working hours
 /// /:clinic/settings/services   what can be booked, how long, how much
@@ -52,6 +53,12 @@ final adminRouterProvider = Provider<GoRouter>(
       GoRoute(
         path: 'data',
         builder: (_, __) => _framed(const ImportExportScreen()),
+      ),
+      GoRoute(
+        path: 'activity',
+        builder: (context, _) => _framed(AuditLogScreen(
+          onOpenPatient: (id) => context.pushInClinic('/patients/$id'),
+        )),
       ),
       GoRoute(
         path: 'billing/:id',

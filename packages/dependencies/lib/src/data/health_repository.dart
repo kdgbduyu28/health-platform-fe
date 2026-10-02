@@ -50,7 +50,8 @@ class HealthRepository {
 
   static const _invoiceSelect = '*, items:invoice_items(*), payments(*), '
       'patient:patients(*, person:persons(*)), '
-      'appointment:appointments(service_name, scheduled_at)';
+      'appointment:appointments(service_name, scheduled_at, '
+      'doctor:doctors(full_name))';
 
   static const _historySelect =
       '$_appointmentSelect, visit_note:visit_notes(*)';
@@ -1192,16 +1193,24 @@ class HealthRepository {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
-  Future<void> signIn(String email, String password) =>
-      _db.auth.signInWithPassword(email: email, password: password);
+  // [captchaToken] on sign-in, sign-up and the reset code: Supabase Auth
+  // requires one from Cloudflare Turnstile once CAPTCHA protection is on, and
+  // ignores it while it is off. See HumanCheckController.
+
+  Future<void> signIn(String email, String password, {String? captchaToken}) =>
+      _db.auth.signInWithPassword(
+        email: email,
+        password: password,
+        captchaToken: captchaToken,
+      );
 
   /// Emails a one-time recovery code. Supabase answers the same whether or not
   /// the address has an account, so this reveals nothing about who signed up.
   ///
   /// The email must show `{{ .Token }}`: the default template only has a link,
   /// and this app asks for the code instead (see the backend README).
-  Future<void> sendPasswordResetCode(String email) =>
-      _db.auth.resetPasswordForEmail(email.trim());
+  Future<void> sendPasswordResetCode(String email, {String? captchaToken}) =>
+      _db.auth.resetPasswordForEmail(email.trim(), captchaToken: captchaToken);
 
   /// Exchanges the emailed code for a session, then sets the new password.
   ///
@@ -1221,11 +1230,26 @@ class HealthRepository {
 
   /// Creates an account and nothing else. Access is granted separately: a
   /// patient joins a clinic with its code, staff are added by a clinic admin.
-  Future<void> signUp(String email, String password, String fullName) =>
+  /// [privacyPolicyVersion] and [termsVersion] are what the person agreed
+  /// to; the database records them against the new account (RA 10173).
+  Future<void> signUp(
+    String email,
+    String password,
+    String fullName, {
+    String? captchaToken,
+    String? privacyPolicyVersion,
+    String? termsVersion,
+  }) =>
       _db.auth.signUp(
         email: email,
         password: password,
-        data: {'full_name': fullName},
+        data: {
+          'full_name': fullName,
+          if (privacyPolicyVersion != null)
+            'privacy_policy_version': privacyPolicyVersion,
+          if (termsVersion != null) 'terms_version': termsVersion,
+        },
+        captchaToken: captchaToken,
       );
 
   /// Signs out — after unhooking this browser's push notifications, so the

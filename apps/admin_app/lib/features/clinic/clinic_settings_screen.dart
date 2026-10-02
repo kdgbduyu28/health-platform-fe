@@ -21,10 +21,15 @@ class ClinicSettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const ClinicPageTitle('Clinic settings'),
-        actions: const [
-              NotificationsButton(),
-              AccountMenuButton(),
-              SizedBox(width: 8),
+        actions: [
+              IconButton(
+                tooltip: 'Activity log',
+                icon: const Icon(Icons.history),
+                onPressed: () => context.pushInClinic('/activity'),
+              ),
+              const NotificationsButton(),
+              const AccountMenuButton(),
+              const SizedBox(width: 8),
             ],
       ),
       body: clinic == null
@@ -46,6 +51,19 @@ class ClinicSettingsScreen extends ConsumerWidget {
                   const StaffAccessSection(),
                   const SizedBox(height: 24),
                   const _StaffSection(),
+                  const SizedBox(height: 24),
+                  const _SectionTitle('Activity'),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.history),
+                      title: const Text('Activity log'),
+                      subtitle: const Text(
+                          'Who changed what, and when: patients, visits, '
+                          'bills and settings'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.pushInClinic('/activity'),
+                    ),
+                  ),
                 ],
               ),
             ),
