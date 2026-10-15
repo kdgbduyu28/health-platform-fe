@@ -1,0 +1,10 @@
+# Single-page app fallback.
+#
+# Expo Router owns routes like /:clinic/appointments/:id, which exist only in
+# the client. Without this, a hard refresh or a shared deep link asks
+# Cloudflare Pages for a file that was never built and gets a 404 — the app
+# would only work when entered through /.
+#
+# 200 (rewrite), not 301/302: the browser keeps the original URL so the
+# router can still read the route it was asked for.
+/*    /index.html    200

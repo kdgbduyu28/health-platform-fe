@@ -1,0 +1,30 @@
+{
+  "name": "health-platform-fe",
+  "private": true,
+  "workspaces": [
+    "apps/patient",
+    "apps/doctor",
+    "apps/assistant",
+    "apps/admin",
+    "packages/shared"
+  ],
+  "scripts": {
+    "web:patient": "npm run web -w @health/patient",
+    "web:doctor": "npm run web -w @health/doctor",
+    "web:assistant": "npm run web -w @health/assistant",
+    "web:admin": "npm run web -w @health/admin",
+    "build:web": "./scripts/release.sh --no-deploy",
+    "release": "./scripts/release.sh",
+    "typecheck": "tsc -p packages/shared && tsc -p apps/patient && tsc -p apps/doctor && tsc -p apps/assistant && tsc -p apps/admin",
+    "test": "TZ=Asia/Manila vitest run"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.3"
+  }
+}

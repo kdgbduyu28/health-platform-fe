@@ -4,7 +4,7 @@
 #
 #   ./scripts/release.sh                         # build + deploy all four apps
 #   ./scripts/release.sh patient doctor          # just those two
-#   ./scripts/release.sh --clean                 # flutter clean first
+#   ./scripts/release.sh --clean                 # clear the bundler cache first
 #   ./scripts/release.sh --no-deploy             # build only, print the folders
 #
 # Each app goes to its own Pages project, served at <project>.pages.dev.
@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-# Workspace order matches pubspec.yaml.
+# Workspace order matches package.json.
 APPS=(patient doctor assistant admin)
 
 # Cloudflare Pages project per app; each is served at <project>.pages.dev.
@@ -48,7 +48,7 @@ Usage: ./scripts/release.sh [app...] [--clean] [--no-deploy]
 Builds each selected app for the web, then deploys it to Cloudflare Pages.
 
 Options:
-  --clean          flutter clean in each app before building
+  --clean          clear each app's bundler cache and old build first
   --no-deploy      build only; print the build folders instead of deploying
   --web            accepted for compatibility (web is the only target)
   -h, --help       show this message
@@ -89,18 +89,18 @@ if [[ ${#SELECTED[@]} -eq 0 ]]; then
   SELECTED=("${APPS[@]}")
 fi
 
-if ! command -v flutter >/dev/null 2>&1; then
-  echo "release.sh: flutter is not on PATH" >&2
+if ! command -v npx >/dev/null 2>&1; then
+  echo "release.sh: npx (Node.js) is not on PATH" >&2
+  exit 1
+fi
+if [[ ! -d "$ROOT/node_modules" ]]; then
+  echo "release.sh: dependencies are not installed; run: npm install" >&2
   exit 1
 fi
 
 # Check the Cloudflare login before spending minutes on builds that could not
 # be shipped anyway.
 if [[ "$DEPLOY" == true ]]; then
-  if ! command -v npx >/dev/null 2>&1; then
-    echo "release.sh: npx (Node.js) is not on PATH; needed for wrangler" >&2
-    exit 1
-  fi
   echo "==> checking Cloudflare login"
   if ! whoami_out="$("${WRANGLER[@]}" whoami </dev/null 2>&1)" \
       || ! grep -qi "you are logged in" <<<"$whoami_out"; then
@@ -115,17 +115,24 @@ if [[ "$DEPLOY" == true ]]; then
 fi
 
 # Stop on the first failure: a half-built set is not something to ship.
+#
+# Each app is exported as a static single-page site into apps/<app>/dist,
+# with the files in its public/ folder (_redirects, push_sw.js, icons)
+# copied alongside. EXPO_PUBLIC_* variables set in the environment are baked
+# into the bundle; without them the defaults in supabase_config.ts apply.
 for app in "${SELECTED[@]}"; do
-  dir="$ROOT/apps/${app}_app"
+  dir="$ROOT/apps/${app}"
   echo ""
-  echo "==> building ${app}_app"
+  echo "==> building ${app}"
 
+  extra=()
   if [[ "$CLEAN" == true ]]; then
-    (cd "$dir" && flutter clean)
+    rm -rf "$dir/dist" "$dir/.expo"
+    extra=(--clear)
   fi
 
   started=$SECONDS
-  (cd "$dir" && flutter build web)
+  (cd "$dir" && rm -rf dist && npx expo export --platform web --output-dir dist ${extra[@]+"${extra[@]}"} </dev/null)
   echo "    done in $((SECONDS - started))s"
 done
 
@@ -133,7 +140,7 @@ if [[ "$DEPLOY" == false ]]; then
   echo ""
   echo "Built ${#SELECTED[@]} app(s), not deployed:"
   for app in "${SELECTED[@]}"; do
-    out="$ROOT/apps/${app}_app/build/web"
+    out="$ROOT/apps/${app}/dist"
     printf '  %-10s %s (%s)\n' "$app" "$out" "$(du -sh "$out" | cut -f1)"
   done
   exit 0
@@ -147,8 +154,8 @@ fi
 for app in "${SELECTED[@]}"; do
   project="$(pages_project "$app")"
   echo ""
-  echo "==> deploying ${app}_app to ${project}.pages.dev"
-  "${WRANGLER[@]}" pages deploy "$ROOT/apps/${app}_app/build/web" \
+  echo "==> deploying ${app} to ${project}.pages.dev"
+  "${WRANGLER[@]}" pages deploy "$ROOT/apps/${app}/dist" \
     --project-name "$project" --branch main --commit-dirty=true </dev/null
 done
 

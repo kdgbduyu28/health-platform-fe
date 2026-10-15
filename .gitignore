@@ -14,3 +14,10 @@
 
 # Wrangler (Cloudflare Pages deploys) keeps a local cache here.
 .wrangler/
+
+# npm workspaces and Expo.
+node_modules/
+.expo/
+dist/
+*.tsbuildinfo
+expo-env.d.ts
