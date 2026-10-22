@@ -3,7 +3,7 @@
     "name": "Doctor",
     "slug": "health-doctor",
     "scheme": "health-doctor",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",

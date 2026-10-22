@@ -3,7 +3,7 @@
     "name": "Assistant",
     "slug": "health-assistant",
     "scheme": "health-assistant",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",

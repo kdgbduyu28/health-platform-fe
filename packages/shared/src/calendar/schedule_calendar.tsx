@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { createElement, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { type GestureResponderEvent, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Text, Tooltip } from 'react-native-paper';
 
 import { useLayoutWidth } from '../app/adaptive';
@@ -316,15 +316,8 @@ function DayColumn({
     }
   }
 
-  const background = createElement(
-    'div',
-    {
-      style: { position: 'absolute', inset: 0, cursor: canCreate ? 'pointer' : 'default' },
-      onMouseMove: canCreate ? (e: MouseEvent & { currentTarget: HTMLElement }) => setHover(snap(yOf(e))) : undefined,
-      onMouseLeave: canCreate ? () => setHover(null) : undefined,
-      onClick: canCreate ? (e: MouseEvent & { currentTarget: HTMLElement }) => onCreate!(at(snap(yOf(e))), c.doctor ?? null) : undefined,
-    },
-    // Decoration only; clicks go to the background itself.
+  // Decoration only; clicks go to the background itself.
+  const decoration = (
     <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
       {shaded.map((s) => (
         <View key={s.start} style={{ position: 'absolute', left: 0, right: 0, top: s.start * minuteHeight, height: (s.end - s.start) * minuteHeight, backgroundColor: shade }} />
@@ -337,8 +330,30 @@ function DayColumn({
         </View>
       ))}
       <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 1, backgroundColor: colors.outlineVariant }} />
-    </View>,
+    </View>
   );
+  // The browser gets a div for the hover hint; a phone has no hover, so a tap books the slot.
+  const background =
+    Platform.OS === 'web' ? (
+      createElement(
+        'div',
+        {
+          style: { position: 'absolute', inset: 0, cursor: canCreate ? 'pointer' : 'default' },
+          onMouseMove: canCreate ? (e: MouseEvent & { currentTarget: HTMLElement }) => setHover(snap(yOf(e))) : undefined,
+          onMouseLeave: canCreate ? () => setHover(null) : undefined,
+          onClick: canCreate ? (e: MouseEvent & { currentTarget: HTMLElement }) => onCreate!(at(snap(yOf(e))), c.doctor ?? null) : undefined,
+        },
+        decoration,
+      )
+    ) : (
+      <Pressable
+        disabled={!canCreate}
+        onPress={(e: GestureResponderEvent) => onCreate?.(at(snap(e.nativeEvent.locationY)), c.doctor ?? null)}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      >
+        {decoration}
+      </Pressable>
+    );
 
   return (
     <View style={{ flex: 1 }}>

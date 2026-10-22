@@ -1,5 +1,6 @@
+import { format } from 'date-fns';
 import { createElement, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { type KeyboardTypeOptions, Pressable, type StyleProp, View, type ViewStyle } from 'react-native';
+import { type KeyboardTypeOptions, Platform, Pressable, ScrollView, type StyleProp, View, type ViewStyle } from 'react-native';
 import { Button, Dialog, HelperText, Text, TextInput } from 'react-native-paper';
 
 import { useAppTheme } from '../theme/clinic_theme';
@@ -182,6 +183,137 @@ function NativeFieldFrame({
   );
 }
 
+/// The browser's own controls (`<select>`, date and time inputs) exist only
+/// on the web. On a phone each field below is a tap that opens a dialog.
+const onWeb = Platform.OS === 'web';
+
+/// On a phone: the field's current text, tapped to pick a new value.
+function TapField({
+  label,
+  text,
+  placeholder,
+  error,
+  disabled,
+  onPress,
+}: {
+  label?: string;
+  text: string | null;
+  placeholder?: string;
+  error: boolean;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const { colors, fonts } = useAppTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={onPress}
+      style={{
+        minHeight: 56,
+        justifyContent: 'center',
+        paddingTop: label == null ? 8 : 22,
+        paddingBottom: 8,
+        paddingLeft: 14,
+        paddingRight: 40,
+        borderRadius: 12,
+        borderWidth: error ? 2 : 1,
+        borderColor: error ? colors.error : 'transparent',
+        backgroundColor: colors.surfaceContainerHighest,
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        style={{
+          fontSize: fonts.bodyLarge.fontSize,
+          color: disabled ? colors.onSurfaceDisabled : text == null ? colors.onSurfaceVariant : colors.onSurface,
+        }}
+      >
+        {text ?? placeholder ?? ''}
+      </Text>
+    </Pressable>
+  );
+}
+
+const choiceRow = 48;
+
+/// A list to pick one line from, scrolled to the current one: the phone's
+/// stand-in for a `<select>` and for a time picker.
+function ChoiceDialog({
+  title,
+  labels,
+  disabled,
+  selected,
+  onDone,
+  onCancel,
+}: {
+  title?: string;
+  labels: readonly string[];
+  disabled?: readonly boolean[];
+  selected: number;
+  onDone: (index: number) => void;
+  onCancel: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const list = useRef<ScrollView | null>(null);
+  return (
+    <>
+      {title != null && <Dialog.Title>{title}</Dialog.Title>}
+      <Dialog.ScrollArea style={{ maxHeight: 420, paddingHorizontal: 0 }}>
+        <ScrollView
+          ref={list}
+          onLayout={() => selected > 2 && list.current?.scrollTo({ y: (selected - 2) * choiceRow, animated: false })}
+        >
+          {labels.map((l, i) => {
+            const off = disabled?.[i] === true;
+            const on = i === selected;
+            return (
+              <Pressable
+                key={i}
+                disabled={off}
+                onPress={() => onDone(i)}
+                style={{ height: choiceRow, flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 24 }}
+              >
+                <Icon
+                  name={on ? 'radio-button-checked' : 'radio-button-unchecked'}
+                  size={20}
+                  color={off ? colors.onSurfaceDisabled : on ? colors.primary : colors.onSurfaceVariant}
+                />
+                <Text numberOfLines={1} style={{ flex: 1, color: off ? colors.onSurfaceDisabled : colors.onSurface }}>
+                  {l}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </Dialog.ScrollArea>
+      <Dialog.Actions>
+        <Button onPress={onCancel}>Cancel</Button>
+      </Dialog.Actions>
+    </>
+  );
+}
+
+/// Times of day every [step] minutes as `HH:MM`, with [current] added if it
+/// falls between them, and how each reads ("9:30 AM").
+function timeChoices(step: number, current: string | null): { values: string[]; labels: string[] } {
+  const values: string[] = [];
+  for (let m = 0; m < 24 * 60; m += Math.max(1, step)) {
+    values.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+  }
+  if (current != null && !values.includes(current)) {
+    values.push(current);
+    values.sort();
+  }
+  return { values, labels: values.map(timeLabel) };
+}
+
+function timeLabel(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  return format(new Date(2000, 0, 1, h, m), 'h:mm a');
+}
+
 export type SelectOption<T> = { value: T; label: string; disabled?: boolean };
 
 /// A drop-down: the browser's own `<select>`, which every device already
@@ -209,7 +341,36 @@ export function SelectField<T extends string | number>({
   style?: StyleProp<ViewStyle>;
 }) {
   const inputStyle = useNativeInputStyle(!!error, disabled);
+  const overlay = useOverlay();
   const index = value == null ? -1 : options.findIndex((o) => o.value === value);
+  if (!onWeb) {
+    const pick = async () => {
+      const i = await overlay.showDialog<number>((close) => (
+        <ChoiceDialog
+          title={label}
+          labels={options.map((o) => o.label)}
+          disabled={options.map((o) => o.disabled === true)}
+          selected={index}
+          onDone={close}
+          onCancel={() => close(-1)}
+        />
+      ));
+      const o = i == null || i < 0 ? undefined : options[i];
+      if (o) onChange(o.value);
+    };
+    return (
+      <NativeFieldFrame label={label} error={error} helperText={helperText} style={style} trailing="arrow-drop-down">
+        <TapField
+          label={label}
+          text={index === -1 ? null : options[index].label}
+          placeholder={placeholder}
+          error={!!error}
+          disabled={disabled}
+          onPress={() => void pick()}
+        />
+      </NativeFieldFrame>
+    );
+  }
   return (
     <NativeFieldFrame label={label} error={error} helperText={helperText} style={style} trailing="arrow-drop-down">
       {createElement(
@@ -254,6 +415,24 @@ export function DateField({
   style?: StyleProp<ViewStyle>;
 }) {
   const inputStyle = useNativeInputStyle(!!error, disabled);
+  const pickDay = useDatePicker();
+  if (!onWeb) {
+    const pick = async () => {
+      const day = await pickDay({ initial: value, first: min, last: max, title: label });
+      if (day != null) onChange(day);
+    };
+    return (
+      <NativeFieldFrame label={label} error={error} helperText={helperText} style={style} trailing="calendar-today">
+        <TapField
+          label={label}
+          text={value == null ? null : format(value, 'MMM d, y')}
+          error={!!error}
+          disabled={disabled}
+          onPress={() => void pick()}
+        />
+      </NativeFieldFrame>
+    );
+  }
   return (
     <NativeFieldFrame label={label} error={error} helperText={helperText} style={style}>
       {createElement('input', {
@@ -290,6 +469,18 @@ export function TimeField({
   style?: StyleProp<ViewStyle>;
 }) {
   const inputStyle = useNativeInputStyle(!!error, disabled);
+  const pickTime = useTimePicker();
+  if (!onWeb) {
+    const pick = async () => {
+      const time = await pickTime({ initial: value, title: label, step });
+      if (time != null) onChange(time);
+    };
+    return (
+      <NativeFieldFrame label={label} error={error} style={style} trailing="schedule">
+        <TapField label={label} text={value == null ? null : timeLabel(value)} error={!!error} disabled={disabled} onPress={() => void pick()} />
+      </NativeFieldFrame>
+    );
+  }
   return (
     <NativeFieldFrame label={label} error={error} style={style}>
       {createElement('input', {
@@ -319,13 +510,14 @@ export function useDatePicker(): (opts: {
   return useCallback(
     async (opts) =>
       (await overlay.showDialog<Date | null>((close) =>
-        opts.selectable ? (
+        opts.selectable || !onWeb ? (
           <MonthGridDialog
             title={opts.title ?? 'Pick a day'}
             initial={opts.initial ?? null}
             first={opts.first ?? null}
             last={opts.last ?? null}
-            selectable={opts.selectable}
+            selectable={opts.selectable ?? (() => true)}
+            years={!onWeb}
             onDone={(d) => close(d)}
             onCancel={() => close(null)}
           />
@@ -355,6 +547,7 @@ function MonthGridDialog({
   first,
   last,
   selectable,
+  years = false,
   onDone,
   onCancel,
 }: {
@@ -363,6 +556,8 @@ function MonthGridDialog({
   first: Date | null;
   last: Date | null;
   selectable: (day: Date) => boolean;
+  /// Buttons that jump a year, for days far off (a birthday).
+  years?: boolean;
   onDone: (day: Date) => void;
   onCancel: () => void;
 }) {
@@ -383,6 +578,8 @@ function MonthGridDialog({
   while (cells.length % 7 !== 0) cells.push(null);
   const canBack = min == null || new Date(month.getFullYear(), month.getMonth(), 0).getTime() >= min;
   const canNext = max == null || new Date(month.getFullYear(), month.getMonth() + 1, 1).getTime() <= max;
+  const canBackYear = min == null || new Date(month.getFullYear(), month.getMonth() - 11, 0).getTime() >= min;
+  const canNextYear = max == null || new Date(month.getFullYear() + 1, month.getMonth(), 1).getTime() <= max;
   const label = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   return (
@@ -393,12 +590,22 @@ function MonthGridDialog({
           <Text variant="titleMedium" style={{ flex: 1 }}>
             {label}
           </Text>
+          {years && (
+            <Button compact disabled={!canBackYear} onPress={() => setMonth(new Date(month.getFullYear() - 1, month.getMonth(), 1))}>
+              <Icon name="keyboard-double-arrow-left" size={22} color={canBackYear ? colors.primary : colors.onSurfaceDisabled} />
+            </Button>
+          )}
           <Button compact disabled={!canBack} onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
             <Icon name="chevron-left" size={22} color={canBack ? colors.primary : colors.onSurfaceDisabled} />
           </Button>
           <Button compact disabled={!canNext} onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>
             <Icon name="chevron-right" size={22} color={canNext ? colors.primary : colors.onSurfaceDisabled} />
           </Button>
+          {years && (
+            <Button compact disabled={!canNextYear} onPress={() => setMonth(new Date(month.getFullYear() + 1, month.getMonth(), 1))}>
+              <Icon name="keyboard-double-arrow-right" size={22} color={canNextYear ? colors.primary : colors.onSurfaceDisabled} />
+            </Button>
+          )}
         </View>
         <View style={{ flexDirection: 'row', marginTop: 8 }}>
           {weekdayInitials.map((d, i) => (
@@ -451,19 +658,33 @@ function MonthGridDialog({
 
 /// Asks for a time of day, as `HH:MM`: Flutter's `showTimePicker`. Null if
 /// cancelled.
-export function useTimePicker(): (opts: { initial?: string | null; title?: string }) => Promise<string | null> {
+export function useTimePicker(): (opts: { initial?: string | null; title?: string; step?: number }) => Promise<string | null> {
   const overlay = useOverlay();
   return useCallback(
     async (opts) =>
-      (await overlay.showDialog<string | null>((close) => (
-        <PickerDialog
-          title={opts.title ?? 'Pick a time'}
-          type="time"
-          initial={opts.initial ?? ''}
-          onDone={(v) => close(v === '' ? null : v.slice(0, 5))}
-          onCancel={() => close(null)}
-        />
-      ))) ?? null,
+      (await overlay.showDialog<string | null>((close) => {
+        if (!onWeb) {
+          const { values, labels } = timeChoices(opts.step ?? 15, opts.initial ?? null);
+          return (
+            <ChoiceDialog
+              title={opts.title ?? 'Pick a time'}
+              labels={labels}
+              selected={opts.initial == null ? values.indexOf('09:00') : values.indexOf(opts.initial)}
+              onDone={(i) => close(values[i])}
+              onCancel={() => close(null)}
+            />
+          );
+        }
+        return (
+          <PickerDialog
+            title={opts.title ?? 'Pick a time'}
+            type="time"
+            initial={opts.initial ?? ''}
+            onDone={(v) => close(v === '' ? null : v.slice(0, 5))}
+            onCancel={() => close(null)}
+          />
+        );
+      })) ?? null,
     [overlay],
   );
 }

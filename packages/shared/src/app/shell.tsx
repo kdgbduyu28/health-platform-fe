@@ -4,9 +4,10 @@ import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { Slot, usePathname, useRouter } from 'expo-router';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View, useColorScheme } from 'react-native';
+import { Platform as RNPlatform, ScrollView, StyleSheet, View, useColorScheme } from 'react-native';
 import { ActivityIndicator, Button, PaperProvider, Text } from 'react-native-paper';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { type AppRole, roleDisplayName, takesStaffCodes } from '../models/app_role';
 import { mapAsync } from '../queries/async_value';
@@ -73,6 +74,10 @@ function ThemedApp({ hasLanding, ready }: { hasLanding: boolean; ready: boolean 
   const textSize = usePreference((p) => p.textSize);
   const dark = mode === 'dark' || (mode === 'system' && system === 'dark');
   const theme = buildClinicTheme(clinic, dark, textSizeMeta[textSize].scale);
+  // Android draws the app behind the status and gesture bars; the browser does not.
+  const insets = useSafeAreaInsets();
+  const edges =
+    RNPlatform.OS === 'web' ? null : { paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right };
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -85,7 +90,8 @@ function ThemedApp({ hasLanding, ready }: { hasLanding: boolean; ready: boolean 
   return (
     <PaperProvider theme={theme} settings={{ icon: PaperIcon }}>
       <OverlayHost>
-        <View style={{ flex: 1, backgroundColor: theme.colors.surface }}>
+        <View style={[{ flex: 1, backgroundColor: theme.colors.surface }, edges]}>
+          {RNPlatform.OS !== 'web' && <StatusBar style={dark ? 'light' : 'dark'} />}
           <RedirectGate hasLanding={hasLanding} ready={ready}>
             <PolicyGate>
               <Slot />

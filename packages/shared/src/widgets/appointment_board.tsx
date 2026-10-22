@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { createElement, type ReactNode, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { Button, IconButton, Text, Tooltip } from 'react-native-paper';
 
 import { ContentWidth, useLayoutWidth } from '../app/adaptive';
@@ -180,6 +180,8 @@ function Lane({
   const [hovering, setHovering] = useState(false);
   const tone = readable(statusMeta[columnMeta[column].tone].color);
   const wide = draggable;
+  // Drag and drop is the browser's; on a phone each card's button moves it on.
+  const dnd = draggable && Platform.OS === 'web';
 
   const lands = (a: Appointment | null) => {
     if (a == null) return false;
@@ -191,7 +193,7 @@ function Lane({
     const step = stepOf(a);
     const body = <BoardCard appointment={a} showDoctor={showDoctor} step={step} onOpen={() => onOpen(a)} onAdvance={() => void onAdvance(a)} />;
     // Only a card whose next step leaves this column can be dragged.
-    if (!draggable || step == null || boardColumnOf(step.to) === column) return body;
+    if (!dnd || step == null || boardColumnOf(step.to) === column) return body;
     return createElement(
       'div',
       {
@@ -249,6 +251,20 @@ function Lane({
 
   if (!wide) return content;
   const accepting = hovering && lands(dragging);
+  const frame = (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 16,
+        borderWidth: accepting ? 2 : 1,
+        borderColor: accepting ? tone : colors.outlineVariant,
+        backgroundColor: accepting ? withAlpha(tone, 28 / 255) : colors.surfaceContainerLow,
+      }}
+    >
+      {content}
+    </View>
+  );
+  if (!dnd) return frame;
   return createElement(
     'div',
     {
@@ -268,17 +284,7 @@ function Lane({
         if (lands(a)) void onAdvance(a!);
       },
     },
-    <View
-      style={{
-        flex: 1,
-        borderRadius: 16,
-        borderWidth: accepting ? 2 : 1,
-        borderColor: accepting ? tone : colors.outlineVariant,
-        backgroundColor: accepting ? withAlpha(tone, 28 / 255) : colors.surfaceContainerLow,
-      }}
-    >
-      {content}
-    </View>,
+    frame,
   );
 }
 
