@@ -6,6 +6,8 @@
 #   ./scripts/release.sh patient doctor          # just those two
 #   ./scripts/release.sh --clean                 # clear the bundler cache first
 #   ./scripts/release.sh --no-deploy             # build only, print the folders
+#   ./scripts/release.sh --apk                   # Android: tag + push; GitHub builds all four APKs into Releases
+#   ./scripts/release.sh --apk=v1.2.0            # same, with an explicit version (default: apps/patient/app.json)
 #
 # Each app goes to its own Pages project, served at <project>.pages.dev.
 # Deploys are production deploys whatever git branch you are on, and a dirty
@@ -39,6 +41,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 CLEAN=false
 DEPLOY=true
+APK=false
+APK_TAG=
 SELECTED=()
 
 usage() {
@@ -50,7 +54,9 @@ Builds each selected app for the web, then deploys it to Cloudflare Pages.
 Options:
   --clean          clear each app's bundler cache and old build first
   --no-deploy      build only; print the build folders instead of deploying
-  --web            accepted for compatibility (web is the only target)
+  --apk[=vX.Y.Z]   Android instead of web: tag this commit and push the tag; GitHub
+                   Actions builds all four APKs and attaches them to the repo's Releases
+  --web            accepted for compatibility (web is the default target)
   -h, --help       show this message
 
 Apps (default: all): patient, doctor, assistant, admin
@@ -63,6 +69,8 @@ while [[ $# -gt 0 ]]; do
     --clean)     CLEAN=true; shift ;;
     --deploy)    DEPLOY=true; shift ;;
     --no-deploy) DEPLOY=false; shift ;;
+    --apk)       APK=true; shift ;;
+    --apk=*)     APK=true; APK_TAG="${1#--apk=}"; shift ;;
     -h|--help)   usage; exit 0 ;;
     -*)
       echo "release.sh: unknown option '$1'" >&2
@@ -84,6 +92,46 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# --apk: tag this commit and push the tag. GitHub Actions
+# (.github/workflows/android-release.yml) builds the APK from that tag and attaches it to
+# the repository's Releases page, so nothing is built here and it costs nothing.
+release_apk() {
+  local tag="$1"
+  cd "$ROOT"
+  [[ -n "$tag" ]] || tag="v$(node -p 'require("./apps/patient/app.json").expo.version')"
+  [[ "$tag" == v* ]] || tag="v$tag"
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    echo "release.sh: no GitHub remote yet; create the repo and push it first" >&2
+    exit 1
+  fi
+  if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+    echo "release.sh: commit your changes first; the APK is built from GitHub, not this folder" >&2
+    exit 1
+  fi
+  git fetch --quiet origin
+  if ! git merge-base --is-ancestor HEAD '@{u}' 2>/dev/null; then
+    echo "release.sh: push this branch first (git push); the APK is built from GitHub" >&2
+    exit 1
+  fi
+  if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null \
+      || git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+    echo "release.sh: $tag already exists; bump the version or pass --apk=vX.Y.Z" >&2
+    exit 1
+  fi
+  git tag -a "$tag" -m "$tag"
+  git push --quiet origin "refs/tags/$tag"
+  local repo
+  repo="$(git remote get-url origin | sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##')"
+  echo "Tagged $tag; GitHub Actions is building the APK (15-25 min):"
+  echo "  progress: https://github.com/$repo/actions/workflows/android-release.yml"
+  echo "  download: https://github.com/$repo/releases/tag/$tag"
+}
+
+if [[ "$APK" == true ]]; then
+  release_apk "$APK_TAG"
+  exit 0
+fi
 
 if [[ ${#SELECTED[@]} -eq 0 ]]; then
   SELECTED=("${APPS[@]}")

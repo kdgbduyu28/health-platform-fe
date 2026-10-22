@@ -13,6 +13,9 @@
     "plugins": ["expo-router"],
     "experiments": {
       "typedRoutes": false
+    },
+    "android": {
+      "package": "com.healthplatform.assistant"
     }
   }
 }
