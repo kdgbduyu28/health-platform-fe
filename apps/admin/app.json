@@ -3,7 +3,7 @@
     "name": "Admin",
     "slug": "health-admin",
     "scheme": "health-admin",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",
