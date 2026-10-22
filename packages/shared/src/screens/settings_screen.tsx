@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { Button, Divider, ProgressBar, SegmentedButtons, Switch, Text } from 'react-native-paper';
 
 import { ContentWidth } from '../app/adaptive';
@@ -29,6 +29,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { JoinClinicScreen } from './join_clinic_screen';
 import { StaffCodeScreen } from './staff_code_screen';
 import { useStaffPin } from './staff_pin';
+
+/// Where "Contact us" in settings writes to.
+const contactEmail = 'timothyborja28@gmail.com';
 
 /// `/:clinic/preferences`: how this app looks and what it tells you, plus
 /// the account's own chores. The same page in all four apps; what is on it
@@ -351,6 +354,16 @@ function AboutCard() {
           onPress={() => router.push(`/${document.id}` as never)}
         />
       ))}
+      <ListTile
+        leading={<Icon name="mail-outline" color={colors.onSurfaceVariant} />}
+        title="Contact us"
+        subtitle={contactEmail}
+        trailing={chevron}
+        onPress={() => {
+          const subject = encodeURIComponent(`D-Touch ${roleDisplayName(app)} app${clinic != null ? ` · ${clinic.name}` : ''}`);
+          Linking.openURL(`mailto:${contactEmail}?subject=${subject}`).catch(() => overlay.snack(`Email us at ${contactEmail}`));
+        }}
+      />
       <ListTile
         leading={<Icon name="restart-alt" color={colors.onSurfaceVariant} />}
         title="Reset this device's settings"
