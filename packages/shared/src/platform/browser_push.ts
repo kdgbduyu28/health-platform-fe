@@ -159,5 +159,6 @@ export const noPush: BrowserPush = {
 };
 
 export function createBrowserPush(): BrowserPush {
-  return typeof window === 'undefined' ? noPush : new WebPush();
+  // React Native has a `window` but no `document`, service workers or user agent.
+  return typeof window === 'undefined' || typeof document === 'undefined' ? noPush : new WebPush();
 }

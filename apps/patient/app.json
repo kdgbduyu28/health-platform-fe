@@ -3,7 +3,7 @@
     "name": "Patient",
     "slug": "health-patient",
     "scheme": "health-patient",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",

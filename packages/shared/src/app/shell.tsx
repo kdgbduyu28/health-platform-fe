@@ -116,7 +116,8 @@ function RedirectGate({ children, hasLanding, ready }: { children: ReactNode; ha
   const clinicPage = useClinicPage(slug, needsPage);
   const memberships = useMyMemberships();
   const myPatients = useMyPatients();
-  const search = typeof window === 'undefined' ? '' : window.location.search;
+  // React Native has a `window` but no `window.location`.
+  const search = typeof window === 'undefined' ? '' : (window.location?.search ?? '');
 
   const decision = auth.ready
     ? decideRedirect({
