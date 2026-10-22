@@ -3,7 +3,8 @@
     "name": "Doctor",
     "slug": "health-doctor",
     "scheme": "health-doctor",
-    "version": "1.0.3",
+    "version": "1.0.4",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",
@@ -15,7 +16,12 @@
       "typedRoutes": false
     },
     "android": {
-      "package": "com.healthplatform.doctor"
+      "package": "com.healthplatform.doctor",
+      "adaptiveIcon": {
+        "backgroundColor": "#1D4ED8",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
     }
   }
 }

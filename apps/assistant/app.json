@@ -3,7 +3,8 @@
     "name": "Assistant",
     "slug": "health-assistant",
     "scheme": "health-assistant",
-    "version": "1.0.3",
+    "version": "1.0.4",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",
@@ -15,7 +16,12 @@
       "typedRoutes": false
     },
     "android": {
-      "package": "com.healthplatform.assistant"
+      "package": "com.healthplatform.assistant",
+      "adaptiveIcon": {
+        "backgroundColor": "#B45309",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
     }
   }
 }

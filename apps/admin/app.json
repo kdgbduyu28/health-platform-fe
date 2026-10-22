@@ -3,7 +3,8 @@
     "name": "Admin",
     "slug": "health-admin",
     "scheme": "health-admin",
-    "version": "1.0.3",
+    "version": "1.0.4",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",
@@ -15,7 +16,12 @@
       "typedRoutes": false
     },
     "android": {
-      "package": "com.healthplatform.admin"
+      "package": "com.healthplatform.admin",
+      "adaptiveIcon": {
+        "backgroundColor": "#6D28D9",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
     }
   }
 }

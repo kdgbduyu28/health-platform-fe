@@ -3,7 +3,8 @@
     "name": "Patient",
     "slug": "health-patient",
     "scheme": "health-patient",
-    "version": "1.0.3",
+    "version": "1.0.4",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",
@@ -15,7 +16,12 @@
       "typedRoutes": false
     },
     "android": {
-      "package": "com.healthplatform.patient"
+      "package": "com.healthplatform.patient",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F766E",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
     }
   }
 }
