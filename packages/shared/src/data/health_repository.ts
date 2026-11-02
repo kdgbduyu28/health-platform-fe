@@ -7,6 +7,7 @@ import { Appointment } from '../models/appointment';
 import type { AppointmentStatus } from '../models/appointment_status';
 import { Clinic } from '../models/clinic';
 import { ClinicPage } from '../models/clinic_page';
+import { ClinicReport } from '../models/clinic_report';
 import { ClinicalNote } from '../models/clinical_note';
 import { type ImportKind, ImportBatch, ImportRowResult, type UndoImportResult } from '../models/data_import';
 import { type DentalCode, type DentalEntryStatus, DentalEntry, type ToothSurface } from '../models/dental_chart';
@@ -1030,6 +1031,20 @@ export class HealthRepository {
   /// Admins only.
   voidExpense(expenseId: string, reason: string): Promise<void> {
     return run(this.db.rpc('void_expense', { p_expense_id: expenseId, p_reason: reason }));
+  }
+
+  // ── Reports ──────────────────────────────────────────────────────────────
+  // 20261102120000_clinic_report. Admins.
+
+  async fetchClinicReport(clinicId: string, range: { from: Date; to: Date }): Promise<ClinicReport> {
+    const row = await must(
+      this.db.rpc('clinic_report', {
+        p_clinic_id: clinicId,
+        p_from: formatDay(range.from),
+        p_to: formatDay(range.to),
+      }),
+    );
+    return ClinicReport.fromJson(row as Json);
   }
 
   // ── Notifications ─────────────────────────────────────────────────────────

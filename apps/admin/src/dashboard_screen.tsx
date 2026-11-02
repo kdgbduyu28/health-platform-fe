@@ -77,9 +77,14 @@ export function DashboardScreen() {
         </>
       }
     >
-      <Text variant="titleMedium" style={{ fontWeight: '700', marginBottom: 12 }}>
-        Today's Overview
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+        <Text variant="titleMedium" style={{ flex: 1, fontWeight: '700' }}>
+          Today's Overview
+        </Text>
+        <Button icon="insights" onPress={() => nav.push('/reports')}>
+          Reports
+        </Button>
+      </View>
       {/* Room for both on one line: today on the left, the clinic at large
           on the right. */}
       <View onLayout={onLayout}>

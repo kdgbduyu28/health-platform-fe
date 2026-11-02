@@ -37,6 +37,7 @@ export * from './models/audit_entry';
 export * from './models/board';
 export * from './models/clinic';
 export * from './models/clinic_page';
+export * from './models/clinic_report';
 export * from './models/clinical_note';
 export * from './models/data_import';
 export * from './models/dental_chart';

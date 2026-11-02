@@ -143,7 +143,8 @@ export function LedgerView({ onOpenInvoice }: { onOpenInvoice: (invoiceId: strin
   );
 }
 
-function RangeDialog({ initial, first, last, close }: { initial: BillingRange; first: Date; last: Date; close: Close<BillingRange> }) {
+/// From and to, neither past [last]; OK only when from comes first.
+export function RangeDialog({ initial, first, last, close }: { initial: BillingRange; first: Date; last: Date; close: Close<BillingRange> }) {
   const [from, setFrom] = useState<Date | null>(initial.from);
   const [to, setTo] = useState<Date | null>(initial.to);
   const valid = from != null && to != null && from.getTime() <= to.getTime();
@@ -258,7 +259,17 @@ function Tile({ label, value, icon, accent, note, emphasis = false }: TileProps)
 
 /// Each row's share of the total as a thin bar, one colour, the amount in
 /// text beside it.
-function Breakdown({ title, rows, color }: { title: string; rows: [string, number][]; color: string }) {
+export function Breakdown({
+  title,
+  rows,
+  color,
+  format: show = formatPeso,
+}: {
+  title: string;
+  rows: [string, number][];
+  color: string;
+  format?: (value: number) => string;
+}) {
   const { colors } = useAppTheme();
   const top = rows.reduce((m, [, v]) => (v > m ? v : m), 0);
   return (
@@ -272,7 +283,7 @@ function Breakdown({ title, rows, color }: { title: string; rows: [string, numbe
           <View style={{ flex: 1, borderRadius: 4, overflow: 'hidden' }}>
             <ProgressBar progress={top === 0 ? 0 : value / top} color={color} style={{ height: 8, backgroundColor: colors.surfaceContainerHighest }} />
           </View>
-          <Text style={{ width: 108, textAlign: 'right', fontWeight: '600' }}>{formatPeso(value)}</Text>
+          <Text style={{ width: 108, textAlign: 'right', fontWeight: '600' }}>{show(value)}</Text>
         </View>
       ))}
     </View>

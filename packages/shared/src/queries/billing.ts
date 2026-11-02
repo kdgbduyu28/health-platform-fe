@@ -1,5 +1,6 @@
 import { type QueryClient, useQuery } from '@tanstack/react-query';
 
+import type { ClinicReport } from '../models/clinic_report';
 import type { BillingSummary, Invoice } from '../models/invoice';
 import type { LedgerEntry, LedgerSummary } from '../models/ledger';
 import { useRepository } from '../state/platform';
@@ -100,11 +101,23 @@ export function useLedgerEntries(range: BillingRange): AsyncValue<LedgerEntry[]>
   );
 }
 
+/// How the range went: visits, doctors, services, new patients. Admins.
+export function useClinicReport(range: BillingRange): AsyncValue<ClinicReport | null> {
+  const repo = useRepository();
+  const clinicId = useCurrentClinicId();
+  return fromQuery(
+    useQuery({
+      queryKey: ['clinicReport', clinicId, ...rangeKey(range)],
+      queryFn: () => (clinicId == null ? null : repo.fetchClinicReport(clinicId, range)),
+    }),
+  );
+}
+
 /// After any change to a bill, a payment or an expense, every view of them
 /// refetches.
 export function invalidateBilling(qc: QueryClient): Promise<void> {
   return Promise.all(
-    ['ledgerSummary', 'ledgerEntries', 'invoices', 'invoice', 'appointmentInvoice', 'patientInvoices', 'billingSummary'].map(
+    ['ledgerSummary', 'ledgerEntries', 'clinicReport', 'invoices', 'invoice', 'appointmentInvoice', 'patientInvoices', 'billingSummary'].map(
       (k) => qc.invalidateQueries({ queryKey: [k] }),
     ),
   ).then(() => undefined);
