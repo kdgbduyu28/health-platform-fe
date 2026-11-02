@@ -86,6 +86,11 @@ export class Doctor {
     readonly availableTimeSlots: string[],
     readonly profileId: string | null = null,
     readonly isActive: boolean = true,
+    /// Printed on prescriptions: the PRC licence, the professional tax
+    /// receipt, and the S2 licence (dangerous drugs only).
+    readonly prcLicenseNo: string | null = null,
+    readonly ptrNo: string | null = null,
+    readonly s2LicenseNo: string | null = null,
   ) {}
 
   static fromJson(json: Json): Doctor {
@@ -98,6 +103,9 @@ export class Doctor {
       (json.available_time_slots ?? []).map(String),
       json.profile_id ?? null,
       json.is_active ?? true,
+      json.prc_license_no ?? null,
+      json.ptr_no ?? null,
+      json.s2_license_no ?? null,
     );
   }
 

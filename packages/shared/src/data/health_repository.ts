@@ -16,6 +16,7 @@ import { BillingSummary, Invoice, type PaymentMethod } from '../models/invoice';
 import { LedgerEntry, LedgerSummary } from '../models/ledger';
 import { ClinicMembership } from '../models/membership';
 import { Patient, type PatientFlag, PatientPage, type PatientSort } from '../models/patient';
+import { Prescription, type RxItem, rxItemToJson } from '../models/prescription';
 import { type IntakeSource, type IntakeSubmission, PatientIntake } from '../models/patient_intake';
 import { Profile } from '../models/profile';
 import { Service } from '../models/service';
@@ -1031,6 +1032,61 @@ export class HealthRepository {
   /// Admins only.
   voidExpense(expenseId: string, reason: string): Promise<void> {
     return run(this.db.rpc('void_expense', { p_expense_id: expenseId, p_reason: reason }));
+  }
+
+  // ── Prescriptions ────────────────────────────────────────────────────────
+  // 20261102120100_prescriptions. Written by the prescribing doctor; read by
+  // clinicians and the patient (who never sees a voided one).
+
+  /// One chart's prescriptions, newest first.
+  async fetchPatientPrescriptions(patientId: string): Promise<Prescription[]> {
+    const rows = await must(
+      this.db.from('prescriptions').select(Prescription.select).eq('patient_id', patientId).order('issued_at', { ascending: false }),
+    );
+    return (rows as Json[]).map(Prescription.fromJson);
+  }
+
+  /// Those written at one visit, oldest first.
+  async fetchVisitPrescriptions(appointmentId: string): Promise<Prescription[]> {
+    const rows = await must(
+      this.db.from('prescriptions').select(Prescription.select).eq('appointment_id', appointmentId).order('issued_at'),
+    );
+    return (rows as Json[]).map(Prescription.fromJson);
+  }
+
+  async fetchPrescription(id: string): Promise<Prescription | null> {
+    const row = await must(this.db.from('prescriptions').select(Prescription.select).eq('id', id).maybeSingle());
+    return row == null ? null : Prescription.fromJson(row as Json);
+  }
+
+  /// Writes one in [doctorId]'s name — the signed-in doctor's own roster row.
+  async writePrescription(args: {
+    clinicId: string;
+    patientId: string;
+    doctorId: string;
+    appointmentId?: string | null;
+    items: RxItem[];
+    notes?: string | null;
+  }): Promise<string> {
+    const row = await must(
+      this.db
+        .from('prescriptions')
+        .insert({
+          clinic_id: args.clinicId,
+          patient_id: args.patientId,
+          doctor_id: args.doctorId,
+          appointment_id: args.appointmentId ?? null,
+          items: args.items.map(rxItemToJson),
+          notes: args.notes?.trim() || null,
+        })
+        .select('id')
+        .single(),
+    );
+    return (row as Json).id as string;
+  }
+
+  voidPrescription(id: string, reason: string): Promise<void> {
+    return run(this.db.rpc('void_prescription', { p_id: id, p_reason: reason }));
   }
 
   // ── Reports ──────────────────────────────────────────────────────────────
