@@ -47,6 +47,8 @@ export class AppNotification {
         return 'chat-bubble-outline';
       case 'invoice_issued':
         return 'receipt-long';
+      case 'prescription_written':
+        return 'medication';
       default:
         return 'notifications-none';
     }
@@ -85,6 +87,7 @@ export function notificationTopicsFor(app: AppRole): NotificationTopic[] {
         t('visit_cancelled', 'Visit cancelled', 'When the clinic cancels a visit'),
         t('patient_note', 'Notes from your doctor', 'Advice written after a visit'),
         t('invoice_issued', 'Bills', 'When a new bill is ready'),
+        t('prescription_written', 'Prescriptions', 'When your doctor writes you one'),
       ];
     case 'assistant':
     case 'admin':

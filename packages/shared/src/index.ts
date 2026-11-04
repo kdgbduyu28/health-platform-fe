@@ -105,6 +105,7 @@ export * from './widgets/ledger_view';
 export * from './widgets/patient_chooser';
 export * from './widgets/patient_intake_form';
 export * from './widgets/patient_remarks';
+export * from './widgets/prescriptions';
 export * from './widgets/print_statement_sheet';
 export * from './widgets/record_visit_sheet';
 export * from './widgets/reschedule_sheet';

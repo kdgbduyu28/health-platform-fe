@@ -93,6 +93,9 @@ function DoctorEditor({ doctor, close }: { doctor: Doctor | null; close: (saved?
   const [specialty, setSpecialty] = useState(doctor?.specialty ?? '');
   const [weekdays, setWeekdays] = useState<Set<number>>(() => new Set(doctor == null ? [1, 2, 3, 4, 5] : doctor.availableWeekdays));
   const [active, setActive] = useState(doctor?.isActive ?? true);
+  const [prc, setPrc] = useState(doctor?.prcLicenseNo ?? '');
+  const [ptr, setPtr] = useState(doctor?.ptrNo ?? '');
+  const [s2, setS2] = useState(doctor?.s2LicenseNo ?? '');
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; specialty?: string }>({});
 
   /// The hours as first time / last time / every N minutes. Starts from the
@@ -150,6 +153,9 @@ function DoctorEditor({ doctor, close }: { doctor: Doctor | null; close: (saved?
           available_weekdays: days,
           available_time_slots: slots,
           is_active: active,
+          prc_license_no: prc.trim() || null,
+          ptr_no: ptr.trim() || null,
+          s2_license_no: s2.trim() || null,
         });
       }
       close(true);
@@ -170,6 +176,25 @@ function DoctorEditor({ doctor, close }: { doctor: Doctor | null; close: (saved?
       <TextField label="Full name" placeholder='Maria Santos (no "Dr.")' value={name} onChangeText={setName} autoFocus={isNew} autoCapitalize="words" error={fieldErrors.name} />
       <View style={{ height: 12 }} />
       <TextField label="Specialty" value={specialty} onChangeText={setSpecialty} autoCapitalize="words" error={fieldErrors.specialty} />
+      {/* Printed on their prescriptions. A new doctor gets them on the next
+          edit, or adds them from a visit. */}
+      {!isNew && (
+        <>
+          <Text variant="titleSmall" style={{ marginTop: 20, marginBottom: 8 }}>
+            Licence numbers
+          </Text>
+          <TextField label="PRC licence no." value={prc} onChangeText={setPrc} maxLength={40} />
+          <View style={{ height: 12 }} />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <TextField label="PTR no." value={ptr} onChangeText={setPtr} maxLength={40} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <TextField label="S2 no." value={s2} onChangeText={setS2} maxLength={40} />
+            </View>
+          </View>
+        </>
+      )}
       <Text variant="titleSmall" style={{ marginTop: 20, marginBottom: 8 }}>
         Working days
       </Text>

@@ -10,6 +10,7 @@ import {
   type IconName,
   Page,
   PatientNoteSection,
+  PrescriptionsSection,
   PreviousVisitsSection,
   SplitColumns,
   VisitBillSection,
@@ -90,6 +91,7 @@ function Details({ appointment: a }: { appointment: Appointment }) {
     <PreviousVisitsSection key="previous" appointment={a} onOpenHistory={openHistory} onOpenAppointment={(v) => nav.open(`/appointments/${v.id}`)} />,
     <VisitNoteSection key="visit-note" appointment={a} />,
     <PatientNoteSection key="patient-note" appointment={a} />,
+    <PrescriptionsSection key="prescriptions" patient={a.patient} appointment={a} />,
   ];
   const bill = (
     <View style={{ marginBottom: 12 }}>

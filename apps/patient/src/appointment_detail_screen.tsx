@@ -29,6 +29,8 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 
+import { VisitPrescriptionsCard } from './my_prescriptions_screen';
+
 export function AppointmentDetailScreen({ appointmentId }: { appointmentId: string }) {
   const qc = useQueryClient();
   const async = useAppointmentById(appointmentId);
@@ -110,6 +112,8 @@ function Details({ appointment: a }: { appointment: Appointment }) {
       {/* At a dental clinic: which teeth were treated, what was found, what
           comes next — in plain words, without the clinic's notes. */}
       <VisitDentalSummary patientId={a.patient.id} appointmentId={a.id} forPatient />
+
+      <VisitPrescriptionsCard appointmentId={a.id} />
 
       <VisitBillSection appointment={a} onOpenInvoice={(id) => nav.push(`/bills/${id}`)} />
 
