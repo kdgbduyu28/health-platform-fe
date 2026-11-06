@@ -14,7 +14,7 @@ export const auditAreaMeta: Record<AuditArea, { label: string; tables: readonly 
     tables: ['patients', 'persons', 'patient_intakes', 'chart_notes', 'visit_notes', 'dental_chart_entries', 'prescriptions'],
   },
   visits: { label: 'Visits', tables: ['appointments'] },
-  billing: { label: 'Billing', tables: ['invoices', 'invoice_items', 'payments', 'expenses'] },
+  billing: { label: 'Billing', tables: ['invoices', 'invoice_items', 'payments', 'expenses', 'treatment_estimates', 'estimate_items'] },
   clinic: {
     label: 'Clinic & staff',
     tables: ['clinics', 'services', 'doctors', 'doctor_time_off', 'clinic_memberships', 'staff_invites'],
@@ -43,6 +43,8 @@ const recordLabels: Record<string, string> = {
   invoice_items: 'Bill item',
   payments: 'Payment',
   expenses: 'Expense',
+  treatment_estimates: 'Estimate',
+  estimate_items: 'Estimate line',
   clinics: 'Clinic details',
   services: 'Service',
   doctors: 'Doctor',

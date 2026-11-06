@@ -26,6 +26,7 @@ import { StatusBadge } from '../widgets/appointment_bits';
 import { AuditLogView } from '../widgets/audit_log_view';
 import { InvoiceTile } from '../widgets/billing_widgets';
 import { ChartNoteSection } from '../widgets/clinical_notes';
+import { EstimatesSection } from '../widgets/estimates';
 import { PrescriptionsSection } from '../widgets/prescriptions';
 import { DentalChartSection, DentalEntryTile, VisitDentalLine, useToothNumbering } from '../widgets/dental_chart';
 import { patientRemarks } from '../models/patient_remarks';
@@ -384,6 +385,7 @@ function OverviewTab({
                 <ChartNoteSection patient={patient} />
                 <PrescriptionsSection patient={patient} />
                 <BalanceCard patientId={patient.id} onShowTab={onShowTab} />
+                <EstimatesSection patient={patient} />
               </>
             }
             // On a phone: what to watch out for before the history.
@@ -399,6 +401,7 @@ function OverviewTab({
                 <ChartNoteSection patient={patient} />
                 <PrescriptionsSection patient={patient} />
                 <BalanceCard patientId={patient.id} onShowTab={onShowTab} />
+                <EstimatesSection patient={patient} />
               </>
             }
           />

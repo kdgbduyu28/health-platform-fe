@@ -12,6 +12,7 @@ import { ClinicalNote } from '../models/clinical_note';
 import { type ImportKind, ImportBatch, ImportRowResult, type UndoImportResult } from '../models/data_import';
 import { type DentalCode, type DentalEntryStatus, DentalEntry, type ToothSurface } from '../models/dental_chart';
 import { Doctor } from '../models/doctor';
+import { type EstimateLine, TreatmentEstimate } from '../models/estimate';
 import { BillingSummary, Invoice, type PaymentMethod } from '../models/invoice';
 import { LedgerEntry, LedgerSummary } from '../models/ledger';
 import { ClinicMembership } from '../models/membership';
@@ -1087,6 +1088,95 @@ export class HealthRepository {
 
   voidPrescription(id: string, reason: string): Promise<void> {
     return run(this.db.rpc('void_prescription', { p_id: id, p_reason: reason }));
+  }
+
+  // ── Treatment estimates ──────────────────────────────────────────────────
+  // 20261106120000_treatment_estimates. Staff write and read them; a patient
+  // reads their own once sent.
+
+  /// One chart's estimates, newest first.
+  async fetchPatientEstimates(patientId: string): Promise<TreatmentEstimate[]> {
+    const rows = await must(
+      this.db.from('treatment_estimates').select(TreatmentEstimate.select).eq('patient_id', patientId).order('created_at', { ascending: false }),
+    );
+    return (rows as Json[]).map(TreatmentEstimate.fromJson);
+  }
+
+  async fetchEstimate(id: string): Promise<TreatmentEstimate | null> {
+    const row = await must(this.db.from('treatment_estimates').select(TreatmentEstimate.select).eq('id', id).maybeSingle());
+    return row == null ? null : TreatmentEstimate.fromJson(row as Json);
+  }
+
+  /// Creates a draft, or rewrites one: its title, notes, validity and every
+  /// line. Answers its id.
+  async saveEstimateDraft(args: {
+    id?: string | null;
+    clinicId: string;
+    patientId: string;
+    title: string | null;
+    notes: string | null;
+    validUntil: Date | null;
+    lines: EstimateLine[];
+  }): Promise<string> {
+    const head = {
+      title: args.title?.trim() || null,
+      notes: args.notes?.trim() || null,
+      valid_until: args.validUntil == null ? null : formatDay(args.validUntil),
+    };
+    let id = args.id ?? null;
+    if (id == null) {
+      const row = await must(
+        this.db
+          .from('treatment_estimates')
+          .insert({ clinic_id: args.clinicId, patient_id: args.patientId, ...head })
+          .select('id')
+          .single(),
+      );
+      id = (row as Json).id as string;
+    } else {
+      await run(this.db.from('treatment_estimates').update(head).eq('id', id));
+      await run(this.db.from('estimate_items').delete().eq('estimate_id', id));
+    }
+    if (args.lines.length > 0) {
+      await run(
+        this.db.from('estimate_items').insert(
+          args.lines.map((l, i) => ({
+            estimate_id: id,
+            clinic_id: args.clinicId,
+            service_id: l.serviceId,
+            dental_entry_id: l.dentalEntryId,
+            tooth: l.tooth,
+            description: l.description.trim(),
+            quantity: l.quantity,
+            unit_price: l.unitPrice,
+            position: i,
+          })),
+        ),
+      );
+    }
+    return id;
+  }
+
+  deleteEstimateDraft(id: string): Promise<void> {
+    return run(this.db.from('treatment_estimates').delete().eq('id', id));
+  }
+
+  sendEstimate(id: string): Promise<void> {
+    return run(this.db.rpc('send_estimate', { p_id: id }));
+  }
+
+  decideEstimate(id: string, accept: boolean): Promise<void> {
+    return run(this.db.rpc('decide_estimate', { p_id: id, p_accept: accept }));
+  }
+
+  voidEstimate(id: string, reason: string): Promise<void> {
+    return run(this.db.rpc('void_estimate', { p_id: id, p_reason: reason }));
+  }
+
+  /// The draft bill an accepted estimate becomes. Answers the bill's id.
+  async estimateToInvoice(id: string): Promise<string> {
+    const invoiceId = await must(this.db.rpc('estimate_to_invoice', { p_id: id }));
+    return invoiceId as unknown as string;
   }
 
   // ── Reports ──────────────────────────────────────────────────────────────

@@ -49,6 +49,9 @@ export class AppNotification {
         return 'receipt-long';
       case 'prescription_written':
         return 'medication';
+      case 'estimate_sent':
+      case 'estimate_decided':
+        return 'sell';
       default:
         return 'notifications-none';
     }
@@ -88,6 +91,7 @@ export function notificationTopicsFor(app: AppRole): NotificationTopic[] {
         t('patient_note', 'Notes from your doctor', 'Advice written after a visit'),
         t('invoice_issued', 'Bills', 'When a new bill is ready'),
         t('prescription_written', 'Prescriptions', 'When your doctor writes you one'),
+        t('estimate_sent', 'Treatment estimates', 'When the clinic sends you a quote'),
       ];
     case 'assistant':
     case 'admin':
@@ -95,6 +99,7 @@ export function notificationTopicsFor(app: AppRole): NotificationTopic[] {
         t('booking_requested', 'Booking requests', 'A patient asks for a visit'),
         t('visit_moved', 'Reschedule requests', 'A patient asks to move a visit'),
         t('visit_cancelled', 'Cancellations', 'A patient cancels a visit'),
+        t('estimate_decided', 'Estimate answers', 'A patient accepts or declines an estimate'),
       ];
     case 'doctor':
       return [t('patient_arrived', 'Patient arrived', 'Your patient is checked in and waiting')];
