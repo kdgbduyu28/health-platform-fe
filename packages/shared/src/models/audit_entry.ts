@@ -11,7 +11,7 @@ export const auditAreas: readonly AuditArea[] = ['patients', 'visits', 'billing'
 export const auditAreaMeta: Record<AuditArea, { label: string; tables: readonly string[] }> = {
   patients: {
     label: 'Patients',
-    tables: ['patients', 'persons', 'patient_intakes', 'chart_notes', 'visit_notes', 'dental_chart_entries', 'prescriptions'],
+    tables: ['patients', 'persons', 'patient_intakes', 'chart_notes', 'visit_notes', 'dental_chart_entries', 'prescriptions', 'chart_attachments'],
   },
   visits: { label: 'Visits', tables: ['appointments'] },
   billing: { label: 'Billing', tables: ['invoices', 'invoice_items', 'payments', 'expenses', 'treatment_estimates', 'estimate_items'] },
@@ -38,6 +38,7 @@ const recordLabels: Record<string, string> = {
   visit_notes: 'Visit note',
   dental_chart_entries: 'Tooth chart',
   prescriptions: 'Prescription',
+  chart_attachments: 'X-ray or photo',
   appointments: 'Visit',
   invoices: 'Bill',
   invoice_items: 'Bill item',
@@ -242,6 +243,8 @@ const fieldLabels: Record<string, string> = {
   ptr_no: 'PTR',
   s2_license_no: 'S2 licence',
   void_reason: 'Void reason',
+  shared_with_patient: 'Shared with patient',
+  taken_on: 'Taken on',
 };
 
 /// "date_of_birth" → "Date of birth", with the few that read better by hand.

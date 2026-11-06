@@ -79,6 +79,9 @@ export function ProfileScreen() {
           <Button mode="contained-tonal" icon="sell" onPress={() => nav.push('/estimates')}>
             Treatment estimates
           </Button>
+          <Button mode="contained-tonal" icon="medical-information" onPress={() => nav.push('/files')}>
+            X-rays & photos
+          </Button>
           <Button mode="contained-tonal" icon="event-available" onPress={openFeed}>
             Visits in my calendar
           </Button>

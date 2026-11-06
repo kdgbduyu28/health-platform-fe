@@ -1,5 +1,6 @@
 import {
   type Appointment,
+  AttachmentsSection,
   AsyncView,
   ChartNoteSection,
   ContentWidth,
@@ -95,6 +96,7 @@ function Details({ appointment: a }: { appointment: Appointment }) {
     <VisitNoteSection key="visit-note" appointment={a} />,
     <PatientNoteSection key="patient-note" appointment={a} />,
     <PrescriptionsSection key="prescriptions" patient={patient} appointment={a} />,
+    <AttachmentsSection key="attachments" patient={patient} appointment={a} />,
   ];
   // The next step of the visit, once it has been saved.
   const actions = (

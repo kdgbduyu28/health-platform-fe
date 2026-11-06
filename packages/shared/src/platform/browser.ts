@@ -79,6 +79,33 @@ export function pickTextFile(accept = '.csv,text/csv'): Promise<PickedTextFile |
   });
 }
 
+/// A file the person picked, as it is.
+export type PickedFile = { name: string; type: string; size: number; blob: Blob };
+
+/// Asks the browser for one file of the [accept] types. Null if they cancel,
+/// and always outside a browser.
+export function pickFile(accept: string): Promise<PickedFile | null> {
+  if (!inBrowser()) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: PickedFile | null) => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.addEventListener('change', () => {
+      const file = input.files?.item(0);
+      finish(file ? { name: file.name, type: file.type, size: file.size, blob: file } : null);
+    });
+    input.addEventListener('cancel', () => finish(null));
+    input.click();
+  });
+}
+
 /// A spreadsheet's bytes as text. UTF-8 normally; Excel on Windows still
 /// saves "CSV" in the old Western encoding, where "Peña" is not valid UTF-8,
 /// so that falls back to Latin-1 instead of turning the ñ into �.

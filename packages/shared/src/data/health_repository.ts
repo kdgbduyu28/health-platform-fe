@@ -2,6 +2,7 @@ import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 
 import { SupabaseConfig } from '../config/supabase_config';
 import { AppNotification } from '../models/app_notification';
+import { type AttachmentKind, ChartAttachment } from '../models/attachment';
 import type { AppRole } from '../models/app_role';
 import { Appointment } from '../models/appointment';
 import type { AppointmentStatus } from '../models/appointment_status';
@@ -1177,6 +1178,89 @@ export class HealthRepository {
   async estimateToInvoice(id: string): Promise<string> {
     const invoiceId = await must(this.db.rpc('estimate_to_invoice', { p_id: id }));
     return invoiceId as unknown as string;
+  }
+
+  // ── Chart attachments ────────────────────────────────────────────────────
+  // 20261106120100_chart_attachments. Files in the private `chart-files`
+  // bucket at <clinic>/<chart>/<random>.<ext>, each with a row that decides
+  // who reads it. Clinicians write; a patient reads what was shared.
+
+  static readonly attachmentBucket = 'chart-files';
+
+  /// One chart's files, newest first.
+  async fetchPatientAttachments(patientId: string): Promise<ChartAttachment[]> {
+    const rows = await must(
+      this.db.from('chart_attachments').select().eq('patient_id', patientId).order('created_at', { ascending: false }),
+    );
+    return (rows as Json[]).map(ChartAttachment.fromJson);
+  }
+
+  /// Uploads the file, then records it. If the record is refused the file
+  /// is removed again, so nothing is left that nobody can read.
+  async uploadAttachment(args: {
+    clinicId: string;
+    patientId: string;
+    appointmentId?: string | null;
+    kind: AttachmentKind;
+    file: { name: string; type: string; size: number; blob: Blob };
+    caption?: string | null;
+    takenOn?: Date | null;
+    sharedWithPatient?: boolean;
+  }): Promise<void> {
+    const dot = args.file.name.lastIndexOf('.');
+    const ext = dot > 0 ? args.file.name.substring(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) : 'bin';
+    const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const path = `${args.clinicId}/${args.patientId}/${random}.${ext || 'bin'}`;
+    const bucket = this.db.storage.from(HealthRepository.attachmentBucket);
+    const { error: uploadError } = await bucket.upload(path, args.file.blob, { contentType: args.file.type, upsert: false });
+    if (uploadError) throw uploadError;
+    try {
+      await run(
+        this.db.from('chart_attachments').insert({
+          clinic_id: args.clinicId,
+          patient_id: args.patientId,
+          appointment_id: args.appointmentId ?? null,
+          kind: args.kind,
+          storage_path: path,
+          file_name: args.file.name.slice(0, 255),
+          mime_type: args.file.type,
+          size_bytes: args.file.size,
+          caption: args.caption?.trim() || null,
+          taken_on: args.takenOn == null ? null : formatDay(args.takenOn),
+          shared_with_patient: args.sharedWithPatient ?? false,
+        }),
+      );
+    } catch (e) {
+      await bucket.remove([path]);
+      throw e;
+    }
+  }
+
+  /// A link to the file that works for [seconds]. Only for a file whose row
+  /// the caller can read.
+  async attachmentUrl(storagePath: string, seconds = 3600): Promise<string> {
+    const { data, error } = await this.db.storage.from(HealthRepository.attachmentBucket).createSignedUrl(storagePath, seconds);
+    if (error) throw error;
+    return data.signedUrl;
+  }
+
+  updateAttachment(
+    id: string,
+    changes: { caption?: string | null; kind?: AttachmentKind; takenOn?: Date | null; sharedWithPatient?: boolean },
+  ): Promise<void> {
+    const row: Json = {};
+    if (changes.caption !== undefined) row.caption = changes.caption?.trim() || null;
+    if (changes.kind !== undefined) row.kind = changes.kind;
+    if (changes.takenOn !== undefined) row.taken_on = changes.takenOn == null ? null : formatDay(changes.takenOn);
+    if (changes.sharedWithPatient !== undefined) row.shared_with_patient = changes.sharedWithPatient;
+    return run(this.db.from('chart_attachments').update(row).eq('id', id));
+  }
+
+  /// The record, then the file.
+  async deleteAttachment(a: ChartAttachment): Promise<void> {
+    await run(this.db.from('chart_attachments').delete().eq('id', a.id));
+    const { error } = await this.db.storage.from(HealthRepository.attachmentBucket).remove([a.storagePath]);
+    if (error) throw error;
   }
 
   // ── Reports ──────────────────────────────────────────────────────────────

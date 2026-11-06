@@ -26,6 +26,7 @@ import { StatusBadge } from '../widgets/appointment_bits';
 import { AuditLogView } from '../widgets/audit_log_view';
 import { InvoiceTile } from '../widgets/billing_widgets';
 import { ChartNoteSection } from '../widgets/clinical_notes';
+import { AttachmentsSection } from '../widgets/attachments';
 import { EstimatesSection } from '../widgets/estimates';
 import { PrescriptionsSection } from '../widgets/prescriptions';
 import { DentalChartSection, DentalEntryTile, VisitDentalLine, useToothNumbering } from '../widgets/dental_chart';
@@ -384,6 +385,7 @@ function OverviewTab({
                 <MedicalAlerts patientId={patient.id} onShowTab={onShowTab} />
                 <ChartNoteSection patient={patient} />
                 <PrescriptionsSection patient={patient} />
+                <AttachmentsSection patient={patient} />
                 <BalanceCard patientId={patient.id} onShowTab={onShowTab} />
                 <EstimatesSection patient={patient} />
               </>
@@ -400,6 +402,7 @@ function OverviewTab({
                 <View style={{ height: 8 }} />
                 <ChartNoteSection patient={patient} />
                 <PrescriptionsSection patient={patient} />
+                <AttachmentsSection patient={patient} />
                 <BalanceCard patientId={patient.id} onShowTab={onShowTab} />
                 <EstimatesSection patient={patient} />
               </>
