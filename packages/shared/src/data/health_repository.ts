@@ -1263,6 +1263,16 @@ export class HealthRepository {
     if (error) throw error;
   }
 
+  // ── Recall reminders ─────────────────────────────────────────────────────
+  // 20261106120200_recall_reminders. The front desk and admins.
+
+  /// Reminds every chart due for recall that has an account and was not
+  /// reminded in the last 30 days. [dryRun] only counts them.
+  async sendRecallReminders(clinicId: string, dryRun: boolean): Promise<number> {
+    const n = await must(this.db.rpc('send_recall_reminders', { p_clinic_id: clinicId, p_dry_run: dryRun }));
+    return Number(n ?? 0);
+  }
+
   // ── Reports ──────────────────────────────────────────────────────────────
   // 20261102120000_clinic_report. Admins.
 

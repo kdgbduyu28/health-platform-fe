@@ -17,12 +17,14 @@ import {
   patientFlags,
 } from '../models/patient';
 import { type PatientTableQuery, defaultPatientTableQuery, usePatientTable } from '../queries/catalog';
-import { useAppRole } from '../state/platform';
+import { useCurrentClinicId } from '../queries/clinic';
+import { useAppRole, useRepository } from '../state/platform';
 import { useAppTheme, withAlpha } from '../theme/clinic_theme';
-import { AsyncView } from '../ui/async_view';
+import { AsyncView, describeError } from '../ui/async_view';
 import { SelectField, TextField } from '../ui/fields';
 import { Icon } from '../ui/icon';
 import { AppCard, Avatar, MenuButton } from '../ui/kit';
+import { useOverlay } from '../ui/overlay';
 import { BarAction, Page } from '../ui/page';
 import { ClinicTitle } from '../widgets/chrome';
 import { RemarkChips, remarkColor } from '../widgets/patient_remarks';
@@ -76,6 +78,9 @@ export function PatientDirectoryScreen({
   const railShowsClinic = useRailShowsClinic();
   const recordVisit = useRecordVisitSheet();
   const addPatientFlow = useAddPatient();
+  const overlay = useOverlay();
+  const repo = useRepository();
+  const clinicId = useCurrentClinicId();
   const [q, setQ] = useState<PatientTableQuery>(defaultPatientTableQuery);
   const [width, onLayout] = useLayoutWidth();
   const pageAsync = usePatientTable(q);
@@ -111,6 +116,28 @@ export function PatientDirectoryScreen({
     set({ sort, descending });
   };
 
+  /// Reminds everyone due for recall at once, after saying how many.
+  const remindRecall = async () => {
+    if (clinicId == null) return;
+    try {
+      const due = await repo.sendRecallReminders(clinicId, true);
+      if (due === 0) {
+        overlay.snack('Nobody to remind: those due were reminded in the last 30 days, or have no account to tell.');
+        return;
+      }
+      const ok = await overlay.confirm({
+        title: `Remind ${due} patient${due === 1 ? '' : 's'}?`,
+        message: 'Each gets a notice in their app to book a check-up. Patients without an account are left out; call them.',
+        confirmLabel: 'Send reminders',
+      });
+      if (!ok) return;
+      const sent = await repo.sendRecallReminders(clinicId, false);
+      overlay.snack(`Reminded ${sent} patient${sent === 1 ? '' : 's'}`);
+    } catch (e) {
+      overlay.snack(describeError(e));
+    }
+  };
+
   const addPatient = async () => {
     const added = await addPatientFlow();
     if (added != null) onOpenPatient(added);
@@ -142,6 +169,9 @@ export function PatientDirectoryScreen({
       actions={
         <>
           {canRecordVisits && <BarAction icon="edit-note" label="Manually add visit" onPress={() => void recordVisit()} />}
+          {(app === 'assistant' || app === 'admin') && q.filters.has('recall') && (
+            <BarAction icon="event-repeat" label="Remind for recall" onPress={() => void remindRecall()} />
+          )}
           {canRegister && onOpenData && <BarAction icon="import-export" label="Import / export" onPress={onOpenData} />}
           <BarAction icon="refresh" label="Refresh" onPress={() => void qc.invalidateQueries({ queryKey: ['patientTable'] })} />
           {canRegister && wide && (

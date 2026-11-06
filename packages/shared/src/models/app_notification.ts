@@ -49,6 +49,8 @@ export class AppNotification {
         return 'receipt-long';
       case 'prescription_written':
         return 'medication';
+      case 'recall_due':
+        return 'event-repeat';
       case 'estimate_sent':
       case 'estimate_decided':
         return 'sell';
@@ -92,6 +94,7 @@ export function notificationTopicsFor(app: AppRole): NotificationTopic[] {
         t('invoice_issued', 'Bills', 'When a new bill is ready'),
         t('prescription_written', 'Prescriptions', 'When your doctor writes you one'),
         t('estimate_sent', 'Treatment estimates', 'When the clinic sends you a quote'),
+        t('recall_due', 'Check-up reminders', 'When it is time to book your next check-up'),
       ];
     case 'assistant':
     case 'admin':
