@@ -4,6 +4,7 @@ import type { TreatmentEstimate } from '../models/estimate';
 import { useRepository } from '../state/platform';
 import { type AsyncValue, fromQuery, mapAsync } from './async_value';
 import { useMyPatient } from './catalog';
+import { useCurrentClinicId } from './clinic';
 import { useCurrentClinicRole } from './clinical';
 
 /// One chart's estimates, newest first. Staff see drafts and voided ones;
@@ -26,6 +27,18 @@ export function useMyEstimates(): AsyncValue<TreatmentEstimate[]> {
     useQuery({
       queryKey: ['estimates', 'patient', chart?.id ?? null],
       queryFn: () => (chart == null ? [] : repo.fetchPatientEstimates(chart.id)),
+    }),
+  );
+}
+
+/// Accepted estimates at the current clinic not yet billed. Staff.
+export function useUnbilledEstimates(): AsyncValue<TreatmentEstimate[]> {
+  const repo = useRepository();
+  const clinicId = useCurrentClinicId();
+  return fromQuery(
+    useQuery({
+      queryKey: ['estimates', 'unbilled', clinicId],
+      queryFn: () => (clinicId == null ? [] : repo.fetchUnbilledEstimates(clinicId)),
     }),
   );
 }

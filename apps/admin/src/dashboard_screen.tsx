@@ -9,6 +9,7 @@ import {
   type IconName,
   NotificationsButton,
   Page,
+  formatPeso,
   isOnSite,
   refreshAppointments,
   statusMeta,
@@ -18,6 +19,7 @@ import {
   usePatientCount,
   useReadable,
   useTodayAppointments,
+  useUnbilledEstimates,
   useUpcomingAppointments,
   withAlpha,
 } from '@health/shared';
@@ -34,6 +36,7 @@ export function DashboardScreen() {
   const todayAsync = useTodayAppointments();
   const upcomingAsync = useUpcomingAppointments();
   const patientCount = usePatientCount().value ?? null;
+  const unbilled = useUnbilledEstimates().value ?? [];
   const [width, onLayout] = useLayoutWidth();
 
   const today = todayAsync.value ?? [];
@@ -100,6 +103,21 @@ export function DashboardScreen() {
           </View>
         )}
       </View>
+
+      {/* Accepted quotes no bill has been made from yet: easy to forget once
+          the patient said yes. Each opens the patient, where the estimate is. */}
+      {unbilled.length > 0 && (
+        <View style={{ marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: colors.tertiaryContainer, gap: 4 }}>
+          <Text style={{ fontWeight: '700', color: colors.onTertiaryContainer }}>
+            {`${unbilled.length} accepted estimate${unbilled.length === 1 ? '' : 's'} not billed yet`}
+          </Text>
+          {unbilled.slice(0, 3).map((e) => (
+            <Button key={e.id} compact mode="text" textColor={colors.onTertiaryContainer} style={{ alignSelf: 'flex-start' }} onPress={() => nav.push(`/patients/${e.patientId}`)}>
+              {`${e.title ?? 'Estimate'} · ${formatPeso(e.total)}`}
+            </Button>
+          ))}
+        </View>
+      )}
 
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24, marginBottom: 8 }}>
         <Text variant="titleMedium" style={{ flex: 1, fontWeight: '700' }}>

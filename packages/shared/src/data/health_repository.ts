@@ -1103,6 +1103,21 @@ export class HealthRepository {
     return (rows as Json[]).map(TreatmentEstimate.fromJson);
   }
 
+  /// Accepted estimates at the clinic that no bill has been made from yet,
+  /// oldest decision first.
+  async fetchUnbilledEstimates(clinicId: string): Promise<TreatmentEstimate[]> {
+    const rows = await must(
+      this.db
+        .from('treatment_estimates')
+        .select(TreatmentEstimate.select)
+        .eq('clinic_id', clinicId)
+        .eq('status', 'accepted')
+        .is('invoice_id', null)
+        .order('decided_at'),
+    );
+    return (rows as Json[]).map(TreatmentEstimate.fromJson);
+  }
+
   async fetchEstimate(id: string): Promise<TreatmentEstimate | null> {
     const row = await must(this.db.from('treatment_estimates').select(TreatmentEstimate.select).eq('id', id).maybeSingle());
     return row == null ? null : TreatmentEstimate.fromJson(row as Json);
