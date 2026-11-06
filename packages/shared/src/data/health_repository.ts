@@ -1256,6 +1256,13 @@ export class HealthRepository {
     return run(this.db.from('chart_attachments').update(row).eq('id', id));
   }
 
+  /// How many files the clinic keeps and their size. Clinicians (admins
+  /// included) read every row, so this needs no function of its own.
+  async fetchClinicAttachmentUsage(clinicId: string): Promise<{ count: number; bytes: number }> {
+    const rows = (await must(this.db.from('chart_attachments').select('size_bytes').eq('clinic_id', clinicId))) as Json[];
+    return { count: rows.length, bytes: rows.reduce((sum, r) => sum + Number(r.size_bytes ?? 0), 0) };
+  }
+
   /// The record, then the file.
   async deleteAttachment(a: ChartAttachment): Promise<void> {
     await run(this.db.from('chart_attachments').delete().eq('id', a.id));

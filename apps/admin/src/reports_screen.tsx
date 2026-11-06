@@ -13,7 +13,9 @@ import {
   clinicReportCsvRows,
   downloadTextFile,
   formatPeso,
+  formatBytes,
   formatRate,
+  freeTierStorageBytes,
   inBrowser,
   invoiceStatusMeta,
   isSameDay,
@@ -22,6 +24,7 @@ import {
   statusMeta,
   toCsv,
   useAppTheme,
+  useClinicAttachmentUsage,
   useClinicReport,
   useCurrentClinic,
   useLayoutWidth,
@@ -115,6 +118,7 @@ export function ReportsScreen() {
       <AsyncView value={report} padded onRetry={() => void qc.invalidateQueries({ queryKey: ['clinicReport'] })}>
         {(r) => (r == null ? null : <ReportBody r={r} />)}
       </AsyncView>
+      <StorageLine />
     </Page>
   );
 }
@@ -295,5 +299,19 @@ function DoctorTable({ r, compact }: { r: ClinicReport; compact: boolean }) {
         </>
       )}
     </View>
+  );
+}
+
+/// The clinic's x-rays and photos against the free tier's storage, which
+/// every clinic on the platform shares. Not tied to the dates above.
+function StorageLine() {
+  const { colors } = useAppTheme();
+  const usage = useClinicAttachmentUsage().value ?? null;
+  if (usage == null || usage.count === 0) return null;
+  const share = usage.bytes / freeTierStorageBytes;
+  return (
+    <Text style={{ marginTop: 16, fontSize: 12, color: share > 0.5 ? colors.error : colors.onSurfaceVariant }}>
+      {`Files on charts: ${usage.count} (${formatBytes(usage.bytes)}), ${formatRate(share)} of the platform's 1 GB free storage.`}
+    </Text>
   );
 }

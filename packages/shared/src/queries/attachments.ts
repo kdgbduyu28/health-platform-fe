@@ -4,6 +4,7 @@ import type { ChartAttachment } from '../models/attachment';
 import { useRepository } from '../state/platform';
 import { type AsyncValue, fromQuery } from './async_value';
 import { useMyPatient } from './catalog';
+import { useCurrentClinicId } from './clinic';
 
 /// One chart's files, newest first. Clinicians see all; the patient what was
 /// shared with them.
@@ -33,6 +34,18 @@ export function useAttachmentUrl(a: ChartAttachment): AsyncValue<string> {
       queryFn: () => repo.attachmentUrl(a.storagePath),
       staleTime: 50 * 60 * 1000,
       refetchInterval: 50 * 60 * 1000,
+    }),
+  );
+}
+
+/// The current clinic's files: how many, and how big altogether.
+export function useClinicAttachmentUsage(): AsyncValue<{ count: number; bytes: number } | null> {
+  const repo = useRepository();
+  const clinicId = useCurrentClinicId();
+  return fromQuery(
+    useQuery({
+      queryKey: ['attachments', 'usage', clinicId],
+      queryFn: () => (clinicId == null ? null : repo.fetchClinicAttachmentUsage(clinicId)),
     }),
   );
 }

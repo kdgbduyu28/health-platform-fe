@@ -14,6 +14,9 @@ export const attachmentKindMeta: Record<AttachmentKind, { label: string; icon: I
 /// What the bucket takes — see 20261106120100_chart_attachments.
 export const attachmentMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'] as const;
 export const maxAttachmentBytes = 15 * 1024 * 1024;
+/// Supabase's free tier: 1 GB of Storage for the whole platform, every
+/// clinic together.
+export const freeTierStorageBytes = 1024 * 1024 * 1024;
 
 /// Why a picked file cannot be uploaded, or null when it can.
 export function attachmentProblem(file: { type: string; size: number }): string | null {
