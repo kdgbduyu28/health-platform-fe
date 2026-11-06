@@ -10,6 +10,7 @@ import {
   Icon,
   type IconName,
   ListTile,
+  formatPeso,
   NotificationsButton,
   Page,
   StatusBadge,
@@ -19,6 +20,7 @@ import {
   useClinicNav,
   useCurrentClinic,
   useDentalChart,
+  useMyEstimates,
   useMyPatient,
   useMyProfile,
   useMyUpcomingAppointments,
@@ -82,6 +84,7 @@ export function HomeScreen() {
             <Button mode="contained" icon="add" onPress={() => nav.push('/book')} style={{ marginTop: 16 }} contentStyle={{ height: 48 }}>
               Book Appointment
             </Button>
+            <EstimateWaitingCard />
             {chartsTeeth && (
               <View style={{ marginTop: 16 }}>
                 <MyTeethCard />
@@ -161,6 +164,37 @@ function EmptyCard({ icon }: { icon: IconName }) {
         No upcoming appointments
       </Text>
       <Text style={{ marginTop: 4, color: colors.outline }}>Book your first appointment below</Text>
+    </View>
+  );
+}
+
+/// An estimate the clinic sent that still wants a yes or no. Nothing
+/// otherwise.
+function EstimateWaitingCard() {
+  const { colors } = useAppTheme();
+  const nav = useClinicNav();
+  const waiting = (useMyEstimates().value ?? []).filter((e) => e.canDecide());
+  if (waiting.length === 0) return null;
+  const first = waiting[0];
+  return (
+    <View style={{ marginTop: 16 }}>
+      <AppCard color={colors.tertiaryContainer}>
+        <ListTile
+          onPress={() => nav.push(waiting.length === 1 ? `/estimates/${first.id}` : '/estimates')}
+          leading={<Icon name="sell" color={colors.onTertiaryContainer} />}
+          title={
+            <Text style={{ fontWeight: '600', color: colors.onTertiaryContainer }}>
+              {waiting.length === 1 ? 'An estimate is waiting for your answer' : `${waiting.length} estimates are waiting for your answer`}
+            </Text>
+          }
+          subtitle={
+            <Text style={{ color: colors.onTertiaryContainer }}>
+              {`${first.title ?? 'Treatment estimate'} · ${formatPeso(first.total)}`}
+            </Text>
+          }
+          trailing={<Icon name="chevron-right" color={colors.onTertiaryContainer} />}
+        />
+      </AppCard>
     </View>
   );
 }
