@@ -287,8 +287,8 @@ function WritePrescriptionSheet({
             multiline
             autoCapitalize="sentences"
             maxLength={500}
-            error={tried ? problems[n] : null}
           />
+          {tried && problems[n] != null && <Text style={{ color: colors.error, fontSize: 12 }}>{problems[n]}</Text>}
         </View>
       ))}
       {drafts.length < maxRxItems && (

@@ -97,31 +97,35 @@ export function OverlayHost({ children }: { children: ReactNode }) {
     <OverlayContext.Provider value={api}>
       {children}
       <Portal>
-        {entries.map((e) =>
-          e.kind === 'page' ? (
-            <PageFrame key={e.id} onClose={() => close(e.id, undefined)}>
-              {e.render((value) => close(e.id, value))}
-            </PageFrame>
-          ) : e.kind === 'dialog' ? (
-            <DialogFrame key={e.id} dismissible={e.dismissible} onDismiss={() => close(e.id, undefined)}>
-              {e.render((value) => close(e.id, value))}
-            </DialogFrame>
-          ) : (
-            <SheetFrame key={e.id} dismissible={e.dismissible} onDismiss={() => close(e.id, undefined)}>
-              {e.render((value) => close(e.id, value))}
-            </SheetFrame>
-          ),
-        )}
-        <Snackbar
-          key={snack?.id}
-          visible={snack != null}
-          duration={snack?.duration}
-          onDismiss={() => setSnackQueue((q) => q.slice(1))}
-          action={snack?.action}
-          wrapperStyle={{ maxWidth: 560, alignSelf: 'center', width: '100%' }}
-        >
-          {snack?.message ?? ''}
-        </Snackbar>
+        {/* A Portal renders at Paper's host, above this provider, so what it
+            shows gets the overlay again: a page or sheet can open a dialog. */}
+        <OverlayContext.Provider value={api}>
+          {entries.map((e) =>
+            e.kind === 'page' ? (
+              <PageFrame key={e.id} onClose={() => close(e.id, undefined)}>
+                {e.render((value) => close(e.id, value))}
+              </PageFrame>
+            ) : e.kind === 'dialog' ? (
+              <DialogFrame key={e.id} dismissible={e.dismissible} onDismiss={() => close(e.id, undefined)}>
+                {e.render((value) => close(e.id, value))}
+              </DialogFrame>
+            ) : (
+              <SheetFrame key={e.id} dismissible={e.dismissible} onDismiss={() => close(e.id, undefined)}>
+                {e.render((value) => close(e.id, value))}
+              </SheetFrame>
+            ),
+          )}
+          <Snackbar
+            key={snack?.id}
+            visible={snack != null}
+            duration={snack?.duration}
+            onDismiss={() => setSnackQueue((q) => q.slice(1))}
+            action={snack?.action}
+            wrapperStyle={{ maxWidth: 560, alignSelf: 'center', width: '100%' }}
+          >
+            {snack?.message ?? ''}
+          </Snackbar>
+        </OverlayContext.Provider>
       </Portal>
     </OverlayContext.Provider>
   );
